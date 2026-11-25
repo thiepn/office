@@ -1,4 +1,5 @@
 import {openOffice} from './store.js';
+import {mountVisual} from './visual.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
 let store;
@@ -53,23 +54,24 @@ async function editor(){
  const head=el('div',undefined,'editor-top'),titleWrap=el('label',undefined,'title-wrap'),title=el('input',undefined,'title-input');title.maxLength=120;title.value=doc.title;titleWrap.append(el('span','Document title'),title);
  const actions=el('div',undefined,'editor-actions'),msg=statusNode(),grid=el('div',undefined,'editor-grid'),paper=el('section',undefined,'paper'),body=el('textarea');body.id='document-body';body.value=doc.body;body.maxLength=200000;body.spellcheck=true;const label=el('label','Document (Markdown)');label.htmlFor=body.id;paper.append(label,body);
  const side=el('aside',undefined,'side'),stats=el('p'),history=el('ol');side.append(el('h2','Document details'),stats,el('h2','Saved revisions'),history);
- let timer,busy=false,conflict=false,dirty=false;
+ let timer,busy=false,conflict=false,dirty=false,visual;
  const exportBtn=button('Export Markdown',()=>download(title.value,body.value));
  const reload=button('Reload saved version',async()=>{if(!confirm('Discard unsaved local edits and reload the stored version?'))return;clearTimeout(timer);dirty=false;location.reload();});reload.hidden=true;
  const save=button('Save',()=>persist(),'primary');
  actions.append(save,exportBtn);head.append(titleWrap,actions);side.append(reload);grid.append(paper,side);root.append(link('← All documents','/'),el('h1','Document editor'),head,msg,grid);
  function info(){const words=body.value.trim()?body.value.trim().split(/\s+/).length:0;stats.textContent=words+' words · '+body.value.length+' characters · revision '+doc.revision;history.replaceChildren();for(const v of [...doc.history].reverse()){history.append(el('li','Revision '+v.revision+' · '+date(v.updatedAt)));}if(!doc.history.length)history.append(el('li','No previous revisions'));}
- function update(){dirty=title.value!==doc.title||body.value!==doc.body;info();save.disabled=busy||conflict||!dirty;}
- function change(){update();clearTimeout(timer);if(conflict)return;if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else if(!busy)status(msg,'Saved locally');}
+ function update(){dirty=title.value!==doc.title||body.value!==doc.body||!!visual?.blocked;info();save.disabled=busy||conflict||!dirty||!!visual?.blocked;exportBtn.disabled=!!visual?.blocked;}
+ function change(){update();clearTimeout(timer);if(conflict)return;if(visual?.blocked){status(msg,'Unsupported or unfinished visual edits are not saved. Recover or correct the visual draft.',true);return;}if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else if(!busy)status(msg,'Saved locally');}
  async function persist(){
-  clearTimeout(timer);if(busy||conflict||!dirty)return;busy=true;update();const patch={title:title.value,body:body.value};
+  clearTimeout(timer);if(busy||conflict||!dirty||visual?.blocked)return;busy=true;update();const patch={title:title.value,body:body.value};
   status(msg,'Saving…');
-  try{doc=await store.save(doc.id,doc.revision,patch);busy=false;update();if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
+  try{doc=await store.save(doc.id,doc.revision,patch);busy=false;update();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
+ visual=mountVisual({paper,body,label,onChange:change,onRecovery:text=>download(title.value+' (visual recovery)',text)});
  for(const field of [title,body])field.addEventListener('input',change);
  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();persist();}});
- window.addEventListener('beforeunload',e=>{if(dirty||busy){e.preventDefault();e.returnValue='';}});
+ window.addEventListener('beforeunload',e=>{if(dirty||busy||visual?.blocked){e.preventDefault();e.returnValue='';}});
  info();update();status(msg,'Saved locally');
 }
 try{store=await openOffice();boot.hidden=true;root.hidden=false;if(location.pathname.startsWith('/docs'))await editor();else await library();}
