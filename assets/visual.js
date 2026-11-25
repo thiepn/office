@@ -125,7 +125,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery}){
  }
  function enter(){
   try{
-   const parsed=markdownToVisual(doc,body.value);surface.replaceChildren(parsed);
+   const parsed=markdownToVisual(doc,body.value);selection=null;surface.replaceChildren(parsed);
    if(visualToMarkdown(surface)!==body.value)throw unsupported();
    setBlocked(false,'Visual mode · basic formatting is saved as Markdown.');mode(true);surface.focus();
   }catch(e){note.textContent=e.message+' Original Markdown remains unchanged.';mode(false);body.focus();}
@@ -141,6 +141,8 @@ export function mountVisual({paper,body,label,onChange,onRecovery}){
  });
  function command(name,value){
   if(!active||composing)return;
+  const current=doc.getSelection();
+  if(current?.rangeCount&&surface.contains(current.anchorNode)&&surface.contains(current.focusNode))selection=current.getRangeAt(0).cloneRange();
   surface.focus();const s=doc.getSelection();
   if(selection&&surface.contains(selection.commonAncestorContainer)){s.removeAllRanges();s.addRange(selection);}
   try{if(name!=='undo'&&name!=='redo')doc.execCommand('styleWithCSS',false,false);doc.execCommand(name,false,value??null);sync();}
