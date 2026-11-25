@@ -1,6 +1,5 @@
 import {openOffice} from './store.js';
-import {mountVisual} from './structured-bundle.js';
-import {richText} from './rich-format.js';
+import {richText,parseStructuredFile} from './rich-format.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
 let store;
@@ -15,7 +14,8 @@ function download(title,body,json=false){const url=URL.createObjectURL(new Blob(
 async function library(){
  const hero=el('div',undefined,'hero'),intro=el('div');intro.append(el('div','Workspace / Documents','eyebrow'),el('h1','Your documents'),el('p','Create, find and organize your writing.'));hero.append(intro);
  const state={query:'',sort:'recent',trash:false};let pending=false,generation=0;
- const message=statusNode(),newBtn=button('New document',async()=>{if(pending)return;pending=true;newBtn.disabled=true;try{const d=await store.add('Untitled document','');location.assign(docURL(d.id));}catch(e){status(message,e.message,true);pending=false;newBtn.disabled=false;}},'primary');hero.append(newBtn);
+ const message=statusNode(),newBtn=button('New document',async()=>{if(pending)return;pending=true;newBtn.disabled=true;try{const d=await store.add('Untitled document','');location.assign(docURL(d.id));}catch(e){status(message,e.message,true);pending=false;newBtn.disabled=false;}},'primary');const importInput=el('input');importInput.type='file';importInput.accept='.json,application/json';importInput.hidden=true;const importBtn=button('Import structured document',()=>importInput.click());const heroActions=el('div',undefined,'editor-actions');heroActions.append(importBtn,newBtn,importInput);hero.append(heroActions);
+ importInput.addEventListener('change',async()=>{const file=importInput.files?.[0];importInput.value='';if(!file||pending)return;pending=true;importBtn.disabled=true;newBtn.disabled=true;try{if(file.size>4000000)throw new Error('Structured file exceeds import limit.');const x=parseStructuredFile(await file.text());const {validateStructuredImport}=await import('./structured-bundle.js');validateStructuredImport(x.rich);if(!confirm('Import as a new document? Existing documents will not be changed.'))return;const d=await store.add(x.title,x.rich.originalMarkdown,x.rich);location.assign(docURL(d.id));}catch(e){status(message,e.message,true);}finally{pending=false;importBtn.disabled=false;newBtn.disabled=false;}});
  const tools=el('div',undefined,'toolbar'),search=el('input');search.type='search';search.placeholder='Search documents';search.setAttribute('aria-label','Search documents');search.maxLength=120;
  const sort=el('select');sort.setAttribute('aria-label','Sort documents');for(const [v,label] of [['recent','Recently edited'],['title','Title A–Z']]){const o=el('option',label);o.value=v;sort.append(o);}
  const tabs=el('div',undefined,'tabs'),active=button('Documents',()=>switchTab(false)),trash=button('Trash',()=>switchTab(true));tabs.append(active,trash);tools.append(search,sort,tabs);
@@ -69,7 +69,8 @@ async function editor(){
   try{doc=await store.save(doc.id,doc.revision,patch);busy=false;update();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
- visual=mountVisual({paper,body,label,initialRich:doc.rich,onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
+ const {mountVisual}=await import('./structured-bundle.js');
+ visual=mountVisual({paper,body,label,initialRich:doc.rich,onPrintTitle:()=>title.value,onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
  for(const field of [title,body])field.addEventListener('input',change);
  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();persist();}});
  window.addEventListener('beforeunload',e=>{if(!discarding&&(dirty||busy||visual?.blocked)){e.preventDefault();e.returnValue='';}});
