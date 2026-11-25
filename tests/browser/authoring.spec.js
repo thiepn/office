@@ -3,10 +3,16 @@ async function open(page){await page.goto('/');await page.getByRole('button',{na
 test('authoring typography and page settings survive reload with original Markdown',async({page})=>{
  await open(page);const p=page.locator('.ProseMirror p').first();await p.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');
  await page.getByLabel('Font family').selectOption('sans');await expect(p.locator('[data-office-font="sans"]')).toHaveText('Original source');
+ await page.getByLabel('Font size').selectOption('18');await expect(p.locator('[data-office-size="18"]')).toHaveText('Original source');
+ await page.getByLabel('Text color').selectOption('blue');await expect(p.locator('[data-office-color="blue"]')).toHaveText('Original source');
  await page.getByLabel('Alignment').selectOption('center');await expect(p).toHaveAttribute('data-office-align','center');
+ await page.getByLabel('Line spacing').selectOption('1.5');await expect(p).toHaveAttribute('data-office-spacing','1.5');
  await page.getByLabel('Paper size').selectOption('Letter');await page.getByLabel('Orientation').selectOption('landscape');await page.getByLabel('Margins').selectOption('25');await expect(page.getByRole('status')).toHaveText('Saved locally');
  await page.reload();await expect(page.locator('.ProseMirror [data-office-font="sans"]')).toHaveText('Original source');await expect(page.getByLabel('Orientation')).toHaveValue('landscape');await expect(page.getByLabel('Margins')).toHaveValue('25');
- await expect(page.getByRole('navigation',{name:'Document outline'}).getByRole('button',{name:'Overview'})).toBeVisible();
+ await expect(page.locator('.ProseMirror [data-office-size="18"][data-office-color="blue"]')).toHaveText('Original source');
+ await expect(p).toHaveAttribute('data-office-align','center');await expect(p).toHaveAttribute('data-office-spacing','1.5');
+ const heading=page.getByRole('navigation',{name:'Document outline'}).getByRole('button',{name:'Overview'});await expect(heading).toBeVisible();await p.click();await heading.click();
+ await expect.poll(()=>page.evaluate(()=>{const n=getSelection()?.anchorNode;const el=n?.nodeType===1?n:n?.parentElement;return el?.closest('h1')?.textContent??'';})).toBe('Overview');
  await page.getByRole('button',{name:'Markdown source'}).click();await expect(page.getByLabel('Document (Markdown)')).toHaveValue('# Overview\n\nOriginal source');
 });
 test('structured export and explicit import make a new copy without changing source',async({page})=>{
@@ -21,5 +27,16 @@ test('library does not load editor bundle and invalid exchange creates no record
 test('print action uses selected paper settings and hides editing chrome',async({page})=>{
  await open(page);await page.getByLabel('Paper size').selectOption('Letter');await page.getByLabel('Orientation').selectOption('landscape');await page.getByLabel('Margins').selectOption('25');
  await page.evaluate(()=>{window.print=()=>{window.officePrintCalled=true;};});await page.getByRole('button',{name:'Print / Save PDF'}).click();expect(await page.evaluate(()=>window.officePrintCalled)).toBe(true);
- await page.emulateMedia({media:'print'});await expect(page.locator('.office-ribbon')).toBeHidden();await expect(page.locator('.visual-page')).toBeVisible();await expect(page.locator('style[data-office-print]')).toHaveText('@page { size: Letter landscape; margin: 25mm; }');await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));
+ await page.emulateMedia({media:'print'});await expect(page.locator('.office-ribbon')).toBeHidden();await expect(page.locator('.visual-page')).toBeVisible();const printStyle=page.locator('style[data-office-print]');await expect.poll(()=>printStyle.textContent()).toBe('@page { size: Letter landscape; margin: 25mm; }');
+ const pageRules=await printStyle.evaluate(el=>Array.from(el.sheet.cssRules,r=>r.cssText.toLowerCase()));expect(pageRules.some(rule=>rule.startsWith('@page')&&rule.includes('letter landscape')&&rule.includes('25mm'))).toBe(true);
+ await page.evaluate(()=>window.dispatchEvent(new Event('afterprint')));await page.emulateMedia({media:'screen'});await expect(page.locator('.office-ribbon')).toBeVisible();await expect(page.locator('body')).not.toHaveClass(/office-printing/);
+});
+
+test('table rows columns and header controls persist in the structured record',async({page})=>{
+ await open(page);await page.getByRole('button',{name:'Insert table'}).click();const table=page.locator('.ProseMirror table');await expect(table).toBeVisible();await expect(table.locator('tr')).toHaveCount(3);
+ await table.locator('tr').nth(1).locator('td').first().click();await page.getByRole('button',{name:'Add row',exact:true}).click();await expect(table.locator('tr')).toHaveCount(4);
+ await page.getByRole('button',{name:'Add column',exact:true}).click();await expect(table.locator('tr').first().locator('th,td')).toHaveCount(4);
+ await page.getByRole('button',{name:'Toggle header row',exact:true}).click();await expect(table.locator('tr').first().locator('th')).toHaveCount(0);
+ await page.getByRole('button',{name:'Toggle header column',exact:true}).click();await expect(table.locator('tr').first().locator('th')).toHaveCount(1);
+ await expect(page.getByRole('status')).toHaveText('Saved locally');await page.reload();await expect(table.locator('tr')).toHaveCount(4);await expect(table.locator('tr').first().locator('th,td')).toHaveCount(4);await expect(table.locator('tr').first().locator('th')).toHaveCount(1);
 });
