@@ -52,6 +52,7 @@ async function library(){
 async function editor(){
  const id=new URLSearchParams(location.search).get('id');let doc=id&&await store.get(id);
  if(!doc||doc.trashed){root.append(el('h1','Document unavailable'),el('p','This document does not exist in this browser or is in Trash.'),link('Return to your documents','/'));return;}
+ const {mountVisual}=await import('./structured-bundle.js');
  const head=el('div',undefined,'editor-top'),titleWrap=el('label',undefined,'title-wrap'),title=el('input',undefined,'title-input');title.maxLength=120;title.value=doc.title;titleWrap.append(el('span','Document title'),title);
  const actions=el('div',undefined,'editor-actions'),msg=statusNode(),grid=el('div',undefined,'editor-grid'),paper=el('section',undefined,'paper'),body=el('textarea');body.id='document-body';body.value=doc.body;body.maxLength=200000;body.spellcheck=true;const label=el('label','Document (Markdown)');label.htmlFor=body.id;paper.append(label,body);
  const side=el('aside',undefined,'side'),stats=el('p'),history=el('ol');side.append(el('h2','Document details'),stats,el('h2','Saved revisions'),history);
@@ -69,7 +70,6 @@ async function editor(){
   try{doc=await store.save(doc.id,doc.revision,patch);busy=false;update();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
- const {mountVisual}=await import('./structured-bundle.js');
  visual=mountVisual({paper,body,label,initialRich:doc.rich,onPrintTitle:()=>title.value,onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
  for(const field of [title,body])field.addEventListener('input',change);
  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();persist();}});
