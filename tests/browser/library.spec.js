@@ -22,3 +22,13 @@ test('cross-tab CAS preserves stale local draft',async({page,context})=>{
 test('mobile document library and editor stay within viewport',async({page})=>{
  await page.setViewportSize({width:390,height:844});await page.goto('/');await page.getByRole('button',{name:'New document'}).click();await expect(page.getByLabel('Document (Markdown)')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+test('Markdown export retains unsaved conflicting text and stored history stays intact',async({page,context})=>{
+ await page.goto('/');await page.getByRole('button',{name:'New document'}).click();
+ const body=page.getByLabel('Document (Markdown)');await body.fill('first revision');await expect(page.getByRole('status')).toHaveText('Saved locally');
+ const other=await context.newPage();await other.goto(page.url());await expect(other.getByLabel('Document (Markdown)')).toHaveValue('first revision');
+ await body.fill('second revision');await expect(page.getByRole('status')).toHaveText('Saved locally');await expect(page.getByText('Revision 1 ·',{exact:false})).toBeVisible();
+ await other.getByLabel('Document (Markdown)').fill('unsaved conflicting draft');await expect(other.getByRole('status')).toContainText('changed in another tab');
+ const promise=other.waitForEvent('download');await other.getByRole('button',{name:'Export Markdown'}).click();const download=await promise;
+ expect(await (await import('node:fs/promises')).readFile(await download.path(),'utf8')).toBe('unsaved conflicting draft');
+ other.once('dialog',d=>d.accept());await other.getByRole('button',{name:'Reload saved version'}).click();await expect(other.getByLabel('Document (Markdown)')).toHaveValue('second revision');
+});
