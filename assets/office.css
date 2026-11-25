@@ -20,3 +20,5 @@
 .visual-page code{font: .9em/1.5 ui-monospace,monospace;background:var(--soft);padding:2px 4px;border-radius:3px}
 .visual-page[aria-invalid=true]{border-color:var(--danger)}
 @media(max-width:680px){.visual-page-frame{padding:6px}.visual-page{padding:14px;font-size:16px}.visual-toolbar button{flex:1 1 auto}}
+
+.visual-page.ProseMirror{outline-offset:2px;white-space:pre-wrap;min-width:0}.visual-page table{border-collapse:collapse;table-layout:fixed;width:100%;margin:12px 0}.visual-page td,.visual-page th{border:1px solid var(--line);padding:8px;vertical-align:top;min-width:0;overflow-wrap:anywhere}.visual-page th{background:var(--soft)}.visual-page td p,.visual-page th p{margin:0}.visual-page .selectedCell{background:var(--soft)}.visual-toolbar button[aria-pressed=true]{background:var(--soft);border-color:var(--accent)}.visual-page a{text-decoration:underline}.visual-page pre{white-space:pre-wrap;overflow-wrap:anywhere}.visual-page ul ul,.visual-page ol ol{margin-bottom:0}

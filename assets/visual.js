@@ -91,71 +91,47 @@ export function visualToMarkdown(surface){
  if(md.length>200000||!check)throw unsupported();
  return md;
 }
-export function mountVisual({paper,body,label,onChange,onRecovery}){
- const doc=paper.ownerDocument;
- const create=(tag,text)=>{const n=doc.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
- const controls=create('div');controls.className='visual-mode';
- const source=create('button','Markdown source'),visual=create('button','Visual editor (beta)');
- for(const b of [source,visual])b.type='button';
- controls.setAttribute('role','group');controls.setAttribute('aria-label','Editing mode');controls.append(source,visual);
- const note=create('p');note.className='visual-note';note.setAttribute('aria-live','polite');note.textContent='Markdown is the original document format. Visual mode supports basic formatting.';
- const panel=create('section');panel.className='visual-panel';panel.hidden=true;panel.setAttribute('aria-label','Visual authoring');
- const tools=create('div');tools.className='visual-toolbar';tools.setAttribute('role','group');tools.setAttribute('aria-label','Visual formatting');
- const frame=create('div');frame.className='visual-page-frame';
- const surface=create('div');surface.className='visual-page';surface.contentEditable='true';surface.setAttribute('role','textbox');surface.setAttribute('aria-label','Visual document');surface.setAttribute('aria-multiline','true');surface.spellcheck=true;
- frame.append(surface);
- const recovery=create('button','Export visual recovery text');recovery.type='button';recovery.hidden=true;recovery.addEventListener('click',()=>onRecovery(surface.innerText));
- panel.append(tools,frame,recovery);paper.prepend(controls,note);paper.append(panel);
- let active=false,blocked=false,selection=null,composing=false;
- function mode(value){
-  active=value;body.hidden=value;label.hidden=value;panel.hidden=!value;
-  source.setAttribute('aria-pressed',String(!value));visual.setAttribute('aria-pressed',String(value));
+
+export function sourceToJSON(doc,source){
+ const frag=markdownToVisual(doc,source);
+ const wrap=doc.createElement('div');wrap.append(frag);
+ if(visualToMarkdown(wrap)!==source)throw unsupported();
+ function texts(n,marks=[]){
+  if(n.nodeType===3)return n.nodeValue?[{type:'text',text:n.nodeValue,...(marks.length?{marks}: {})}]:[];
+  if(n.tagName==='BR')return [];
+  const mark={STRONG:'bold',B:'bold',EM:'italic',I:'italic',CODE:'code'}[n.tagName];
+  return Array.from(n.childNodes,c=>texts(c,mark?[...marks,{type:mark}]:marks)).flat();
  }
- function setBlocked(value,message){
-  blocked=value;recovery.hidden=!value;surface.setAttribute('aria-invalid',String(value));note.textContent=message;
+ function para(n){return {type:'paragraph',content:Array.from(n.childNodes,c=>texts(c)).flat()};}
+ function blockJSON(n){
+  if(/^H[1-3]$/.test(n.tagName))return {...para(n),type:'heading',attrs:{level:Number(n.tagName[1])}};
+  if(n.tagName==='BLOCKQUOTE')return {type:'blockquote',content:[para(n)]};
+  if(n.tagName==='UL'||n.tagName==='OL')return {type:n.tagName==='UL'?'bulletList':'orderedList',...(n.tagName==='OL'?{attrs:{start:1}}:{}),content:Array.from(n.children,li=>({type:'listItem',content:[para(li)]}))};
+  return para(n);
  }
- function sync(){
-  if(!active||composing)return;
-  try{
-   const next=visualToMarkdown(surface);
-   setBlocked(false,'Visual mode · basic formatting is saved as Markdown.');
-   if(body.value!==next){body.value=next;body.dispatchEvent(new Event('input',{bubbles:true}));}
-   else onChange();
-  }catch(e){setBlocked(true,e.message+' Unsaved visual edits are retained here. Export recovery text or correct the formatting.');onChange();}
+ return {type:'doc',content:Array.from(wrap.children,blockJSON)};
+}
+export function jsonToSource(doc,json){
+ function inline(n){
+  if(n.type!=='text')throw unsupported();
+  let t=n.text;
+  if(!n.marks?.length)return plain(t);
+  if(n.marks.length!==1)throw unsupported();
+  if(!t||t.trim()!==t)throw unsupported();
+  switch(n.marks[0].type){case 'bold':return '**'+plain(t)+'**';case 'italic':return '*'+plain(t)+'*';case 'code':if(/[\x60\n\r]/.test(t))throw unsupported();return '\x60'+t+'\x60';default:throw unsupported();}
  }
- function enter(){
-  try{
-   const parsed=markdownToVisual(doc,body.value);selection=null;surface.replaceChildren(parsed);
-   if(visualToMarkdown(surface)!==body.value)throw unsupported();
-   setBlocked(false,'Visual mode · basic formatting is saved as Markdown.');mode(true);surface.focus();
-  }catch(e){note.textContent=e.message+' Original Markdown remains unchanged.';mode(false);body.focus();}
+ const p=n=>(n.content??[]).map(inline).join('');
+ function block(n){
+  if(n.type==='paragraph')return p(n);
+  if(n.type==='heading'&&[1,2,3].includes(n.attrs?.level))return '#'.repeat(n.attrs.level)+' '+p(n);
+  if(n.type==='blockquote'&&n.content?.length===1&&n.content[0].type==='paragraph')return '> '+p(n.content[0]);
+  if(n.type==='bulletList'||n.type==='orderedList'){
+   if(n.type==='orderedList'&&n.attrs?.start!==1)throw unsupported();
+   return n.content.map((item,i)=>{if(item.type!=='listItem'||item.content?.length!==1||item.content[0].type!=='paragraph')throw unsupported();return (n.type==='bulletList'?'- ':(i+1)+'. ')+p(item.content[0]);}).join('\n');
+  }
+  throw unsupported();
  }
- source.addEventListener('click',()=>{
-  if(!active)return;
-  if(blocked&&!window.confirm('Discard only the unsupported visual edits and return to the last valid Markdown draft?'))return;
-  setBlocked(false,'Markdown source · no formatting conversion is applied.');mode(false);onChange();body.focus();
- });
- visual.addEventListener('click',()=>{if(!active)enter();});
- doc.addEventListener('selectionchange',()=>{
-  const s=doc.getSelection();if(active&&s?.rangeCount&&surface.contains(s.anchorNode)&&surface.contains(s.focusNode))selection=s.getRangeAt(0).cloneRange();
- });
- function command(name,value){
-  if(!active||composing)return;
-  const current=doc.getSelection();
-  if(current?.rangeCount&&surface.contains(current.anchorNode)&&surface.contains(current.focusNode))selection=current.getRangeAt(0).cloneRange();
-  surface.focus();const s=doc.getSelection();
-  if(selection&&surface.contains(selection.commonAncestorContainer)){s.removeAllRanges();s.addRange(selection);}
-  try{if(name!=='undo'&&name!=='redo')doc.execCommand('styleWithCSS',false,false);doc.execCommand(name,false,value??null);sync();}
-  catch{note.textContent='This browser could not apply the selected formatting. Your document has not been replaced.';}
- }
- for(const [text,name,value] of [['Normal','formatBlock','p'],['Heading 1','formatBlock','h1'],['Heading 2','formatBlock','h2'],['Heading 3','formatBlock','h3'],['Bold','bold'],['Italic','italic'],['Bullets','insertUnorderedList'],['Numbered list','insertOrderedList'],['Quote','formatBlock','blockquote'],['Undo','undo'],['Redo','redo']]){
-  const b=create('button',text);b.type='button';b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',()=>command(name,value));tools.append(b);
- }
- surface.addEventListener('compositionstart',()=>{composing=true;});
- surface.addEventListener('compositionend',()=>{composing=false;sync();});
- surface.addEventListener('input',sync);
- surface.addEventListener('paste',e=>{e.preventDefault();const text=e.clipboardData?.getData('text/plain')??'';if(text)command('insertText',text);});
- surface.addEventListener('drop',e=>{e.preventDefault();note.textContent='Drag-and-drop content is not imported. Paste plain text or use Markdown source.';});
- mode(false);
- return {get blocked(){return blocked||composing;},get active(){return active;}};
+ const source=json.content.map(block).join('\n\n');
+ sourceToJSON(doc,source);
+ return source;
 }
