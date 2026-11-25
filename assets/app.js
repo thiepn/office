@@ -1,5 +1,6 @@
 import {openOffice} from './store.js';
-import {mountVisual} from './visual.js';
+import {mountVisual} from './structured-bundle.js';
+import {richText} from './rich-format.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
 let store;
@@ -10,7 +11,7 @@ const date=iso=>new Date(iso).toLocaleString(undefined,{dateStyle:'medium',timeS
 const docURL=id=>'/docs/?id='+encodeURIComponent(id);
 function statusNode(){const p=el('p','','status');p.setAttribute('role','status');p.setAttribute('aria-live','polite');return p;}
 function status(node,msg,error=false){node.textContent=msg;node.dataset.error=String(error);}
-function download(title,body){const url=URL.createObjectURL(new Blob([body],{type:'text/markdown;charset=utf-8'}));const a=link('',url);a.download=filename(title);document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function download(title,body,json=false){const url=URL.createObjectURL(new Blob([body],{type:json?'application/json':'text/markdown;charset=utf-8'}));const a=link('',url);a.download=json?filename(title).replace(/\.md$/,'.office.json'):filename(title);document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function library(){
  const hero=el('div',undefined,'hero'),intro=el('div');intro.append(el('div','Workspace / Documents','eyebrow'),el('h1','Your documents'),el('p','Create, find and organize your writing.'));hero.append(intro);
  const state={query:'',sort:'recent',trash:false};let pending=false,generation=0;
@@ -40,7 +41,7 @@ async function library(){
     row.dataset.documentId=d.id;
     main.append(d.trashed?el('strong',d.title):link(d.title,docURL(d.id)),el('small',date(d.updatedAt)+' · revision '+d.revision));
     if(d.trashed){const restore=button('Restore',()=>mutate(restore,()=>store.save(d.id,d.revision,{trashed:false})));actions.append(restore);}
-    else{const duplicate=button('Duplicate',()=>mutate(duplicate,()=>store.add(d.title.slice(0,113)+' (copy)',d.body)));const remove=button('Move to trash',()=>{if(confirm('Move this document to Trash? You can restore it later.'))mutate(remove,()=>store.save(d.id,d.revision,{trashed:true}));});actions.append(duplicate,button('Export',()=>download(d.title,d.body)),remove);}
+    else{const duplicate=button('Duplicate',()=>mutate(duplicate,()=>store.add(d.title.slice(0,113)+' (copy)',d.body,d.rich)));const remove=button('Move to trash',()=>{if(confirm('Move this document to Trash? You can restore it later.'))mutate(remove,()=>store.save(d.id,d.revision,{trashed:true}));});actions.append(duplicate,button('Export',()=>d.rich?download(d.title,JSON.stringify({kind:'thiepn-office-structured',title:d.title,rich:d.rich},null,2),true):download(d.title,d.body)),remove);}
     row.append(main,actions);list.append(row);
    }
   }catch(e){if(run===generation)status(message,e.message,true);}
@@ -59,16 +60,16 @@ async function editor(){
  const reload=button('Reload saved version',async()=>{if(!confirm('Discard unsaved local edits and reload the stored version?'))return;clearTimeout(timer);dirty=false;discarding=true;location.reload();});reload.hidden=true;
  const save=button('Save',()=>persist(),'primary');
  actions.append(save,exportBtn);head.append(titleWrap,actions);side.append(reload);grid.append(paper,side);root.append(link('← All documents','/'),el('h1','Document editor'),head,msg,grid);
- function info(){const words=body.value.trim()?body.value.trim().split(/\s+/).length:0;stats.textContent=words+' words · '+body.value.length+' characters · revision '+doc.revision;history.replaceChildren();for(const v of [...doc.history].reverse()){history.append(el('li','Revision '+v.revision+' · '+date(v.updatedAt)));}if(!doc.history.length)history.append(el('li','No previous revisions'));}
- function update(){dirty=title.value!==doc.title||body.value!==doc.body||!!visual?.blocked;info();save.disabled=busy||conflict||!dirty||!!visual?.blocked;exportBtn.disabled=!!visual?.blocked;}
+ function info(){const current=visual?.rich?richText(visual.rich.content):body.value;const words=current.trim()?current.trim().split(/\s+/).length:0;stats.textContent=words+' words · '+current.length+' characters · revision '+doc.revision;history.replaceChildren();for(const v of [...doc.history].reverse()){history.append(el('li','Revision '+v.revision+' · '+date(v.updatedAt)));}if(!doc.history.length)history.append(el('li','No previous revisions'));}
+ function update(){dirty=title.value!==doc.title||body.value!==doc.body||JSON.stringify(visual?.rich??null)!==JSON.stringify(doc.rich??null)||!!visual?.blocked;exportBtn.textContent=visual?.rich?'Export original Markdown':'Export Markdown';info();save.disabled=busy||conflict||!dirty||!!visual?.blocked;exportBtn.disabled=!!visual?.blocked;}
  function change(){update();clearTimeout(timer);if(conflict)return;if(visual?.blocked){status(msg,'Unsupported or unfinished visual edits are not saved. Recover or correct the visual draft.',true);return;}if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else if(!busy)status(msg,'Saved locally');}
  async function persist(){
-  clearTimeout(timer);if(busy||conflict||!dirty||visual?.blocked)return;busy=true;update();const patch={title:title.value,body:body.value};
+  clearTimeout(timer);if(busy||conflict||!dirty||visual?.blocked)return;busy=true;update();const patch={title:title.value,body:body.value,...(visual?.rich?{rich:visual.rich}:{})};
   status(msg,'Saving…');
   try{doc=await store.save(doc.id,doc.revision,patch);busy=false;update();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
- visual=mountVisual({paper,body,label,onChange:change,onRecovery:text=>download(title.value+' (visual recovery)',text)});
+ visual=mountVisual({paper,body,label,initialRich:doc.rich,onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
  for(const field of [title,body])field.addEventListener('input',change);
  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();persist();}});
  window.addEventListener('beforeunload',e=>{if(!discarding&&(dirty||busy||visual?.blocked)){e.preventDefault();e.returnValue='';}});

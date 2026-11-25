@@ -12,3 +12,6 @@ Release requires completed tests on Chromium, Firefox and WebKit and a successfu
 
 ## O3.1 visual editing (beta)
 A guarded visual authoring mode is available alongside Markdown source. See [O3.1 architecture and limitations](docs/o3-visual-editor.md). Existing document records and CAS are unchanged.
+
+## O3.2 structured editor (draft)
+Run npm ci and npm run build (also invoked by npm run dev). See [structured editor contract](docs/o3-2-structured-editor.md).

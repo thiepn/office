@@ -23,7 +23,7 @@ export class OfficeStore {
  }
  list(){return this.run('readonly',(s,done)=>{const req=s.getAll();req.onsuccess=()=>done(req.result);});}
  get(id){return this.run('readonly',(s,done)=>{const req=s.get(id);req.onsuccess=()=>done(req.result);});}
- add(title,body){return this.run('readwrite',(s,done)=>{const doc=create(crypto.randomUUID(),title,body);s.add(doc);done(doc);});}
+ add(title,body,rich){return this.run('readwrite',(s,done)=>{const doc=create(crypto.randomUUID(),title,body,new Date().toISOString(),rich);s.add(doc);done(doc);});}
  save(id,expected,patch){return this.run('readwrite',(s,done,fail)=>{
   const req=s.get(id);req.onsuccess=()=>{try{if(!req.result)throw new Conflict();const next=revise(req.result,expected,patch);if(next!==req.result)s.put(next);done(next);}catch(e){fail(e);}};
  });}
