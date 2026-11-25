@@ -20,12 +20,23 @@ async function library(){
  const list=el('section',undefined,'library');list.setAttribute('aria-label','Document list');root.append(hero,tools,message,list);
  function switchTab(value){state.trash=value;render();}
  search.addEventListener('input',()=>{state.query=search.value;render();});sort.addEventListener('change',()=>{state.sort=sort.value;render();});
- async function mutate(b,work){if(b.disabled)return;b.disabled=true;try{await work();await render();}catch(e){status(message,e.message,true);}finally{b.disabled=false;}}
+ async function mutate(b,work){
+  if(b.disabled)return;const row=b.closest('article'),id=row?.dataset.documentId;
+  b.disabled=true;
+  try{await work();await render();
+   // A completed action replaces the old row. Restore a meaningful keyboard target.
+   if(document.activeElement===document.body||document.activeElement===b){
+    const replacement=[...list.querySelectorAll('article')].find(n=>n.dataset.documentId===id);
+    (replacement?.querySelector('a,button')??(state.trash?trash:active)).focus();
+   }
+  }catch(e){status(message,e.message,true);b.disabled=false;b.focus();}finally{b.disabled=false;}
+ }
  async function render(){
   const run=++generation;active.setAttribute('aria-pressed',String(!state.trash));trash.setAttribute('aria-pressed',String(state.trash));
   try{const rows=selectDocuments(await store.list(),state);if(run!==generation)return;list.replaceChildren();status(message,rows.length+' '+(rows.length===1?'document':'documents'));
    if(!rows.length){const empty=el('div',undefined,'empty');empty.append(el('h2',state.query?'No matching documents':state.trash?'Trash is empty':'Start your first document'),el('p',state.query?'Try another search.':state.trash?'Deleted documents can be restored here.':'Use New document to start writing.'));list.append(empty);return;}
    for(const d of rows){const row=el('article',undefined,'doc'),main=el('div',undefined,'doc-main'),actions=el('div',undefined,'doc-actions');
+    row.dataset.documentId=d.id;
     main.append(d.trashed?el('strong',d.title):link(d.title,docURL(d.id)),el('small',date(d.updatedAt)+' · revision '+d.revision));
     if(d.trashed){const restore=button('Restore',()=>mutate(restore,()=>store.save(d.id,d.revision,{trashed:false})));actions.append(restore);}
     else{const duplicate=button('Duplicate',()=>mutate(duplicate,()=>store.add(d.title.slice(0,113)+' (copy)',d.body)));const remove=button('Move to trash',()=>{if(confirm('Move this document to Trash? You can restore it later.'))mutate(remove,()=>store.save(d.id,d.revision,{trashed:true}));});actions.append(duplicate,button('Export',()=>download(d.title,d.body)),remove);}
@@ -34,7 +45,7 @@ async function library(){
   }catch(e){if(run===generation)status(message,e.message,true);}
  }
  await render();
- window.addEventListener('focus',()=>render());
+ window.addEventListener('focus',()=>{if(!list.contains(document.activeElement))render();});
 }
 async function editor(){
  const id=new URLSearchParams(location.search).get('id');let doc=id&&await store.get(id);
@@ -46,7 +57,7 @@ async function editor(){
  const exportBtn=button('Export Markdown',()=>download(title.value,body.value));
  const reload=button('Reload saved version',async()=>{if(!confirm('Discard unsaved local edits and reload the stored version?'))return;clearTimeout(timer);dirty=false;location.reload();});reload.hidden=true;
  const save=button('Save',()=>persist(),'primary');
- actions.append(save,exportBtn);head.append(titleWrap,actions);side.append(reload);grid.append(paper,side);root.append(link('← All documents','/'),head,msg,grid);
+ actions.append(save,exportBtn);head.append(titleWrap,actions);side.append(reload);grid.append(paper,side);root.append(link('← All documents','/'),el('h1','Document editor'),head,msg,grid);
  function info(){const words=body.value.trim()?body.value.trim().split(/\s+/).length:0;stats.textContent=words+' words · '+body.value.length+' characters · revision '+doc.revision;history.replaceChildren();for(const v of [...doc.history].reverse()){history.append(el('li','Revision '+v.revision+' · '+date(v.updatedAt)));}if(!doc.history.length)history.append(el('li','No previous revisions'));}
  function update(){dirty=title.value!==doc.title||body.value!==doc.body;info();save.disabled=busy||conflict||!dirty;}
  function change(){update();clearTimeout(timer);if(conflict)return;if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else if(!busy)status(msg,'Saved locally');}
