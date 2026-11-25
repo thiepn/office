@@ -9,3 +9,6 @@ Implemented: create/open, search titles and contents, sort, duplicate, reversibl
 O2 uses a new origin-local database, not the Hub Office database. Anyone with access to the same browser profile can access local documents; this is not authenticated storage. Do not use for sensitive documents on shared devices. No migration/import is performed. O3 will address visual authoring; O4 must establish identity-scoped synchronization and a separately tested, explicitly approved migration with preservation of IDs and revisions. Sheets and Slides are not presented as available features.
  
 Release requires completed tests on Chromium, Firefox and WebKit and a successful clean lockfile installation before deployment. No deployment workflow is included.
+
+## O3.1 visual editing (beta)
+A guarded visual authoring mode is available alongside Markdown source. See [O3.1 architecture and limitations](docs/o3-visual-editor.md). Existing document records and CAS are unchanged.
