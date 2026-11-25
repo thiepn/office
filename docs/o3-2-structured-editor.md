@@ -5,4 +5,4 @@ Record schemaVersion 1 remains backward-compatible for Markdown records. Optiona
 
 Initial scope: headings, marks, list nesting, quotes, links, tables and structured undo/redo. Continuous paper surface, not actual page pagination. Structured JSON export is not DOCX export. No import/restore UI for structured JSON yet. A compatibility conversion only supports the O3.1 subset; advanced source stays unchanged. Original source view is not an editable Markdown projection. More extensive typography, formatting fidelity, accessibility and export remain later work.
 
-Dependency qualification: this draft temporarily resolves a lock on CI because the local environment has no registry connectivity. Capture the generated lock, commit it, remove bootstrap and require clean npm ci before merge. No production deployment or Hub data migration.
+Dependency qualification: the CI-generated integrity-pinned lockfile is committed; CI requires clean npm ci and a locally built bundle with no runtime CDN. No production deployment or Hub data migration.

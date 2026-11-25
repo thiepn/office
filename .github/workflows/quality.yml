@@ -14,13 +14,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm test
-      # O3.2 draft bootstrap only. Remove this step once generated lock is committed.
-      - name: Resolve draft dependency lock
-        run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          echo OFFICE_LOCK_BEGIN
-          node -p "JSON.stringify(require('./package-lock.json'))"
-          echo OFFICE_LOCK_END
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npx playwright install --with-deps chromium firefox webkit
