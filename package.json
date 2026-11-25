@@ -1,0 +1,14 @@
+{
+  "name": "thiepn-office",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/model.test.js",
+    "test:browser": "playwright test",
+    "dev": "python3 -m http.server 8000 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}
