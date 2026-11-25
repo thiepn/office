@@ -31,3 +31,10 @@ test('structured draft CAS retains competing edits and JSON export',async({page,
  const json=JSON.parse(await (await import('node:fs/promises')).readFile(await file.path(),'utf8'));expect(json.rich.originalMarkdown).toBe('Original source');expect(JSON.stringify(json.rich.content)).toContain('Stale structured text');
  await page.reload();await expect(p).toContainText('Winner');
 });
+
+test('unsafe link command leaves the document unchanged and announces rejection',async({page})=>{
+ await create(page);const p=page.locator('.ProseMirror p').first();await p.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');
+ page.once('dialog',d=>d.accept('javascript:alert(1)'));await page.getByRole('button',{name:'Link',exact:true}).click();
+ await expect(page.getByText('Invalid or unsafe link.',{exact:true})).toBeVisible();await expect(page.locator('.ProseMirror a')).toHaveCount(0);
+ await expect(p).toHaveText('Original source');await expect(page.getByRole('status')).toHaveText('Saved locally');
+});

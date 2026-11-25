@@ -5,7 +5,9 @@ export function validate(title,body){
  if(typeof body!=='string'||body.length>LIMIT)throw new Error('Document exceeds the 200,000-character limit.');
 }
 export function create(id,title='Untitled document',body='',now=new Date().toISOString(),rich){
- validate(title,body);return {schemaVersion:1,id,title,body,createdAt:now,updatedAt:now,revision:0,history:[],trashed:false,...(rich?{rich:validateRich(rich)}:{})};
+ validate(title,body);
+ if(rich!==undefined){validateRich(rich);if(rich.originalMarkdown!==body)throw new Error('Structured record must preserve its original Markdown.');}
+ return {schemaVersion:1,id,title,body,createdAt:now,updatedAt:now,revision:0,history:[],trashed:false,...(rich?{rich}:{})};
 }
 export class Conflict extends Error {constructor(){super('This document changed in another tab. Your local edits have not been overwritten.');this.name='Conflict';}}
 export function revise(doc,expected,patch,now=new Date().toISOString()){

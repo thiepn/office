@@ -16,3 +16,11 @@ test('reject unsafe links, unsupported schema versions and bounded content',()=>
  const r=envelope();r.content.content[0].content[0].marks=[{type:'link',attrs:{href:'javascript:alert(1)'}}];assert.throws(()=>validateRich(r));
  assert.throws(()=>validateRich(envelope('x'.repeat(200001))));
 });
+
+test('structured creation rejects inconsistent original Markdown and preserves a valid duplicate',()=>{
+ const rich=envelope('Current structured text');
+ assert.throws(()=>create('bad','Title','different',undefined,rich),/original Markdown/);
+ assert.throws(()=>create('bad','Title','original',undefined,null));
+ const d=create('copy','Title','original',undefined,rich);
+ assert.equal(d.id,'copy');assert.equal(d.body,rich.originalMarkdown);assert.deepEqual(d.rich,rich);assert.equal(d.revision,0);assert.deepEqual(d.history,[]);
+});

@@ -69,7 +69,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
   try{const next={version:1,originalMarkdown:body.value,content:editor.getJSON()};validateRich(next);rich=next;mode(true);sync();}catch(e){note.textContent=e.message;}
  }
  function tool(text,fn,{pressed,can,richOnly=false}={}){
-  const b=button(text,()=>{if(!active||!editor||composing)return;try{fn(editor);sync();}catch(e){note.textContent=e.message;}});b.addEventListener('mousedown',e=>e.preventDefault());tools.append(b);selectionControls.push({b,pressed,can,richOnly});
+  const b=button(text,()=>{if(!active||!editor||composing)return;try{if(fn(editor)!==false)sync();}catch(e){note.textContent=e.message;}});b.addEventListener('mousedown',e=>e.preventDefault());tools.append(b);selectionControls.push({b,pressed,can,richOnly});
  }
  // Selection and undo history are ProseMirror transactions, not DOM commands.
  tool('Normal',e=>e.chain().focus().setParagraph().run(),{pressed:e=>e.isActive('paragraph')});
@@ -79,7 +79,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  }
  tool('Indent list',e=>e.chain().focus().sinkListItem('listItem').run(),{richOnly:true,can:e=>e.can().sinkListItem('listItem')});
  tool('Outdent list',e=>e.chain().focus().liftListItem('listItem').run(),{richOnly:true,can:e=>e.can().liftListItem('listItem')});
- tool('Link',e=>{const url=window.prompt('HTTPS, HTTP or mailto link',e.getAttributes('link').href??'https://');if(url===null)return;if(!safeLink(url)){note.textContent='Invalid or unsafe link.';return;}e.chain().focus().extendMarkRange('link').setLink({href:url}).run();},{richOnly:true,pressed:e=>e.isActive('link')});
+ tool('Link',e=>{const url=window.prompt('HTTPS, HTTP or mailto link',e.getAttributes('link').href??'https://');if(url===null)return false;if(!safeLink(url)){note.textContent='Invalid or unsafe link.';return false;}e.chain().focus().extendMarkRange('link').setLink({href:url}).run();},{richOnly:true,pressed:e=>e.isActive('link')});
  tool('Remove link',e=>e.chain().focus().extendMarkRange('link').unsetLink().run(),{richOnly:true,can:e=>e.isActive('link')});
  tool('Insert table',e=>e.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run(),{richOnly:true});
  for(const [name,cmd] of [['Add row','addRowAfter'],['Add column','addColumnAfter'],['Delete row','deleteRow'],['Delete column','deleteColumn'],['Delete table','deleteTable'],['Merge cells','mergeCells'],['Split cell','splitCell']])tool(name,e=>e.chain().focus()[cmd]().run(),{richOnly:true,can:e=>e.can()[cmd]()});
