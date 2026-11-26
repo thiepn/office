@@ -35,4 +35,12 @@ set role authenticated;
 select fixture.assert(public.office_sync_push('a0000000-0000-4000-8000-000000000001',fixture.op(501,null,fixture.doc('release-test')))->>'status'='applied','re-enable replays original receipt');
 reset role;
 select fixture.assert(not office_private.valid_revision('"not numeric"') and not office_private.valid_revision('null') and office_private.valid_revision('0'),'malformed revisions fail closed');
+-- Malformed but allowlisted node structures previously passed the recursive allowlist.
+set role authenticated;
+do $declare a uuid:='a0000000-0000-4000-8000-000000000001';d jsonb:=fixture.doc('invalid-grammar');begin
+ begin perform public.office_sync_push(a,fixture.op(502,null,d||'{"rich":{"version":1,"originalMarkdown":"source","content":{"type":"doc","content":[{"type":"text","text":"not a block"}]}}}'));raise exception 'invalid root accepted';exception when invalid_parameter_value then raise notice 'PASS: invalid structured root child denied';end;
+ begin perform public.office_sync_push(a,fixture.op(503,null,d||'{"rich":{"version":1,"originalMarkdown":"source","content":{"type":"doc","content":[{"type":"bulletList","content":[{"type":"paragraph"}]}]}}}'));raise exception 'invalid list accepted';exception when invalid_parameter_value then raise notice 'PASS: invalid list grammar denied';end;
+ perform fixture.assert(public.office_sync_read(a,'invalid-grammar') is null,'invalid grammar leaves no record');
+end$;
+reset role;
 rollback;

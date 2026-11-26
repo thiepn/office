@@ -57,4 +57,50 @@ create or replace function office_private.valid_revision(v jsonb)
 returns boolean language sql immutable set search_path='' as $$
  select case when jsonb_typeof(v)='number' and v::text ~ '^(0|[1-9][0-9]{0,15})$' then (v::text)::numeric between 0 and 9007199254740991 else false end
 $$;
+-- Enforce core ProseMirror child grammar in addition to the existing node/attribute allowlist.
+-- This is not a replacement for full editor-schema compatibility qualification.
+create function office_private.check_tree_shape(root jsonb)
+returns void language plpgsql set search_path='' as $
+declare total_nodes bigint; total_text bigint; invalid boolean;
+begin
+ with recursive walk(n) as (
+  select root
+  union all
+  select child.value from walk w cross join lateral jsonb_array_elements(coalesce(w.n->'content','[]'::jsonb)) child(value)
+ ), shape as (
+  select n,n->>'type' typ,coalesce(n->'content','[]'::jsonb) children from walk
+ )
+ select count(*),coalesce(sum(case when typ='text' then length(n->>'text') else 0 end),0),
+ coalesce(bool_or(
+  case
+  when typ in ('text','hardBreak','horizontalRule') then jsonb_array_length(children)<>0
+  when typ in ('paragraph','heading') then exists(select 1 from jsonb_array_elements(children) c where c->>'type' not in ('text','hardBreak'))
+  when typ='codeBlock' then exists(select 1 from jsonb_array_elements(children) c where c->>'type'<>'text' or jsonb_array_length(coalesce(c->'marks','[]'))<>0)
+  when typ in ('bulletList','orderedList') then jsonb_array_length(children)=0 or exists(select 1 from jsonb_array_elements(children) c where c->>'type'<>'listItem')
+  when typ='table' then jsonb_array_length(children)=0 or exists(select 1 from jsonb_array_elements(children) c where c->>'type'<>'tableRow')
+  when typ='tableRow' then exists(select 1 from jsonb_array_elements(children) c where c->>'type' not in ('tableCell','tableHeader'))
+  when typ in ('doc','blockquote','listItem','tableCell','tableHeader') then
+    jsonb_array_length(children)=0 or (typ='listItem' and children->0->>'type' is distinct from 'paragraph')
+    or exists(select 1 from jsonb_array_elements(children) c where c->>'type' not in ('paragraph','heading','blockquote','bulletList','orderedList','codeBlock','horizontalRule','table'))
+  else true end
+ ),false) into total_nodes,total_text,invalid from shape;
+ if invalid or total_nodes>30000 or total_text>200000 then raise exception 'invalid_structured_content_grammar' using errcode='22023';end if;
+end $;
+revoke all on function office_private.check_tree_shape(jsonb) from public,anon,authenticated;
+create or replace function office_private.check_snapshot(d jsonb)
+returns void language plpgsql set search_path='' as $
+declare rich jsonb:=d->'rich'; lay jsonb;
+begin
+ if jsonb_typeof(d) is distinct from 'object' or not office_private.valid_revision(d->'revision') or jsonb_typeof(d->'title') is distinct from 'string' or length(d->>'title') not between 1 and 120 or btrim(d->>'title')='' or jsonb_typeof(d->'body') is distinct from 'string' or length(d->>'body')>200000 or jsonb_typeof(d->'trashed') is distinct from 'boolean' then raise exception 'invalid_document_snapshot' using errcode='22023'; end if;
+ perform office_private.check_stamp(d->'updatedAt');
+ if rich is not null then
+  if jsonb_typeof(rich) is distinct from 'object' or rich-array['version','originalMarkdown','content','layout']<>'{}' or rich->'version' is distinct from '1'::jsonb or rich->'originalMarkdown' is distinct from d->'body' or rich->'content'->>'type' is distinct from 'doc' or octet_length(rich::text)>4000000 then raise exception 'invalid_rich_envelope' using errcode='22023'; end if;
+  if rich?'layout' then
+   lay:=rich->'layout';
+   if jsonb_typeof(lay) is distinct from 'object' or lay-array['paper','orientation','margin']<>'{}' or not (lay?&array['paper','orientation','margin']) or lay->'paper' not in ('"A4"','"Letter"') or lay->'orientation' not in ('"portrait"','"landscape"') or lay->'margin' not in ('12','20','25','30') then raise exception 'invalid_page_layout' using errcode='22023'; end if;
+  end if;
+  perform office_private.check_node(rich->'content',0);
+  perform office_private.check_tree_shape(rich->'content');
+ end if;
+end $;
 commit;
