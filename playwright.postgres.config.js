@@ -1,0 +1,2 @@
+import {defineConfig,devices} from '@playwright/test';
+export default defineConfig({testDir:'./tests/integration',reporter:'list',workers:1,timeout:90000,use:{baseURL:'http://127.0.0.1:8000'},webServer:{command:'npm run build && python3 server/tests/browser_gateway.py',url:'http://127.0.0.1:8000/',reuseExistingServer:false},projects:[{name:'chromium',use:devices['Desktop Chrome']},{name:'firefox',use:devices['Desktop Firefox']},{name:'webkit',use:devices['Desktop Safari']}]});

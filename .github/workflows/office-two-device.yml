@@ -1,0 +1,44 @@
+name: Office two-device PostgreSQL integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: office-test-only
+          POSTGRES_DB: office_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d office_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Initialize disposable database and qualify discovery
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: office-test-only
+          PGDATABASE: office_test
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f server/tests/account-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-2-office-sync.sql
+          psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-4-discovery.sql
+          psql -X -v ON_ERROR_STOP=1 -f server/tests/discovery.sql
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright test --config=playwright.postgres.config.js
