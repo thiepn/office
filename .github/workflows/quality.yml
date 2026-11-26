@@ -15,6 +15,7 @@ jobs:
           node-version: '22'
       - run: npm test
       - run: npm ci --no-audit --no-fund
+      - run: node tests/verify-hub-adapter.mjs
       - run: npm run build
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser
