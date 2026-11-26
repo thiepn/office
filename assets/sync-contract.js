@@ -23,6 +23,12 @@ export function operation(id,expected,doc){
  if(expected!==null&&(!rev(expected)||doc.revision!==expected+1))throw new Error('Invalid CAS transition.');
  return {id,expected,doc};
 }
+export function validateManifest(rows){
+ if(!Array.isArray(rows)||rows.length>100)throw Error('Invalid cloud manifest.');
+ const seen=new Set();
+ for(const row of rows){if(!row||Object.keys(row).length!==2||!rev(row.revision))throw Error('Invalid cloud manifest entry.');documentId(row.id);if(seen.has(row.id))throw Error('Duplicate cloud document ID.');seen.add(row.id);}
+ return rows;
+}
 export function validateRemote(result,op){
  if(!result||!['applied','conflict'].includes(result.status)||result.operationId!==op.id)throw new Error('Invalid synchronization response.');
  if(result.status==='applied'&&result.revision!==op.doc.revision)throw new Error('Unexpected committed revision.');
@@ -42,5 +48,5 @@ export function createOfficeTransport({session,issuer,publishableKey,fetcher=fet
   const after=await session.verify();if(after.status!=='signed-in'||ownerId(after.id)!==owner)throw new Error('Account changed during synchronization.');
   return payload;
  }
- return Object.freeze({async push(owner,op){return validateRemote(await request(owner,'office_sync_push',{p_operation:op}),op);},async pull(owner,id){const d=await request(owner,'office_sync_read',{p_document_id:documentId(id)});if(d!==null){validateSyncDocument(d);if(d.id!==id)throw new Error('Wrong remote record.');}return d;}});
+ return Object.freeze({async manifest(owner){return validateManifest(await request(owner,'office_sync_manifest',{}));},async push(owner,op){return validateRemote(await request(owner,'office_sync_push',{p_operation:op}),op);},async pull(owner,id){const d=await request(owner,'office_sync_read',{p_document_id:documentId(id)});if(d!==null){validateSyncDocument(d);if(d.id!==id)throw new Error('Wrong remote record.');}return d;}});
 }
