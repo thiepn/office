@@ -1,7 +1,9 @@
 import {openOffice} from './store.js';
+import {synchronizeWorkspace} from './incremental-sync.js';
 import {richText,parseStructuredFile} from './rich-format.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
+let syncRunning=false;
 let store,accountMode=false,accountController=null,accountRuntime=null,accountLocked=false,freezeEditor=null,syncRefresh=null,libraryRefresh=null;
 const scopeRequested=new URLSearchParams(location.search).get('workspace')==='account';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
@@ -21,6 +23,7 @@ async function library(){
  const tools=el('div',undefined,'toolbar'),search=el('input');search.type='search';search.placeholder='Search documents';search.setAttribute('aria-label','Search documents');search.maxLength=120;
  const sort=el('select');sort.setAttribute('aria-label','Sort documents');for(const [v,label] of [['recent','Recently edited'],['title','Title A–Z']]){const o=el('option',label);o.value=v;sort.append(o);}
  const tabs=el('div',undefined,'tabs'),active=button('Documents',()=>switchTab(false)),trash=button('Trash',()=>switchTab(true));tabs.append(active,trash);tools.append(search,sort,tabs);
+ const archivePanel=el('section',undefined,'account-recovery');archivePanel.hidden=true;root.append(archivePanel);
  const list=el('section',undefined,'library');list.setAttribute('aria-label','Document list');root.append(hero,tools,message,list);
  function switchTab(value){state.trash=value;render();}
  search.addEventListener('input',()=>{state.query=search.value;render();});sort.addEventListener('change',()=>{state.sort=sort.value;render();});
@@ -38,13 +41,36 @@ async function library(){
  async function render(){
   if(accountLocked)return;const run=++generation;active.setAttribute('aria-pressed',String(!state.trash));trash.setAttribute('aria-pressed',String(state.trash));
   try{const rows=selectDocuments(await store.list(),state);if(run!==generation||accountLocked)return;list.replaceChildren();status(message,rows.length+' '+(rows.length===1?'document':'documents'));
+   if(accountMode){const archives=await store.listArchives();if(run!==generation||accountLocked)return;archivePanel.replaceChildren();archivePanel.hidden=!archives.length;if(archives.length){archivePanel.append(el('h2','Conflict recovery archive'));for(const a of archives){archivePanel.append(button('Export archived conflict '+a.documentId,()=>download('Office conflict archive',JSON.stringify(a,null,2),true)));}}}
    if(!rows.length){const empty=el('div',undefined,'empty');empty.append(el('h2',state.query?'No matching documents':state.trash?'Trash is empty':'Start your first document'),el('p',state.query?'Try another search.':state.trash?'Deleted documents can be restored here.':'Use New document to start writing.'));list.append(empty);return;}
    for(const d of rows){const row=el('article',undefined,'doc'),main=el('div',undefined,'doc-main'),actions=el('div',undefined,'doc-actions');
     row.dataset.documentId=d.id;
     main.append(d.trashed?el('strong',d.title):link(d.title,docURL(d.id)),el('small',date(d.updatedAt)+' · revision '+d.revision));
     if(d.trashed){const restore=button('Restore',()=>mutate(restore,()=>store.save(d.id,d.revision,{trashed:false})));actions.append(restore);}
     else{const duplicate=button('Duplicate',()=>mutate(duplicate,()=>store.add(d.title.slice(0,113)+' (copy)',d.body,d.rich)));const remove=button('Move to trash',()=>{if(confirm('Move this document to Trash? You can restore it later.'))mutate(remove,()=>store.save(d.id,d.revision,{trashed:true}));});actions.append(duplicate,button('Export',()=>d.rich?download(d.title,JSON.stringify({kind:'thiepn-office-structured',title:d.title,rich:d.rich},null,2),true):download(d.title,d.body)),remove);}
-    if(accountMode){const sync=await store.inspect(d.id);if(accountLocked||run!==generation)return;main.append(el('small',sync?.conflict?'Cloud conflict — both versions retained':sync?.pending.length?'Pending synchronization':'Up to date locally'));if(sync?.conflict)actions.append(button('Export conflict recovery',()=>download(d.title+' conflict recovery',JSON.stringify({kind:'thiepn-office-conflict',local:sync.doc,remote:sync.conflict.document,pending:sync.pending},null,2),true)));}row.append(main,actions);list.append(row);
+    if(accountMode){const sync=await store.inspect(d.id);if(accountLocked||run!==generation)return;main.append(el('small',sync?.conflict?'Cloud conflict — both versions retained':sync?.pending.length?'Pending synchronization':'Up to date locally'));if(sync?.conflict){
+ actions.append(button('Export conflict recovery',()=>download(d.title+' conflict recovery',JSON.stringify({kind:'thiepn-office-conflict',local:sync.doc,remote:sync.conflict.document,pending:sync.pending},null,2),true)));
+ const details=el('details',undefined,'conflict-review');details.append(el('summary','Resolve cloud conflict'));
+ const versions=el('div',undefined,'conflict-versions');
+ for(const [name,record] of [['Local',sync.doc],['Cloud at conflict',sync.conflict.document]]){const section=el('section');section.append(el('h3',name),el('p',record?record.title+' · revision '+record.revision:'No cloud document'),el('pre',record?(record.rich?richText(record.rich.content):record.body):''));versions.append(section);}
+ details.append(versions,el('p','The current cloud version is checked again before resolution. All divergent versions and queued operations are archived locally.'));
+ for(const [choice,label] of [['remote','Keep cloud version'],['fork','Keep local as separate document'],['local','Apply local as new cloud revision']]){
+  const action=button(label,async()=>{if(accountLocked||syncRunning)return;action.disabled=true;try{
+   const current=await accountController.verify();if(accountLocked||current!==store||accountController.state!=='connected')throw Error('Reconnect before resolving a conflict.');
+   const latest=await accountRuntime.transport.pull(store.owner,d.id);if(accountLocked)return;
+   // Do not act on a cloud version the user has not reviewed.
+   const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])])):v;
+   if(JSON.stringify(canonical(latest))!==JSON.stringify(canonical(sync.conflict.document))){
+    if(!confirm('Cloud version changed since this conflict. Review the refreshed versions before resolving. Refresh now?'))return;
+    await store.refreshConflict(d.id,sync,latest);await render();return;
+   }
+   if(!confirm(label+'? A complete local recovery archive will be retained.'))return;
+   if(accountLocked)return;await store.resolveConflict(d.id,sync,choice,latest);await render();syncRefresh?.();
+  }catch(e){if(!accountLocked)status(message,e.message,true);}finally{action.disabled=false;}});
+  details.append(action);
+ }
+ actions.append(details);
+}}row.append(main,actions);list.append(row);
    }
   }catch(e){if(run===generation)status(message,e.message,true);}
  }
@@ -76,7 +102,7 @@ async function editor(){
  async function persist(){
   clearTimeout(timer);if(accountLocked||busy||conflict||!dirty||visual?.blocked)return;busy=true;update();const patch={title:title.value,body:body.value,...(visual?.rich?{rich:visual.rich}:{})};
   status(msg,'Saving…');
-  try{doc=await store.save(doc.id,doc.revision,patch);busy=false;if(accountLocked)return;update();if(!dirty)clearOwnDraft();syncRefresh?.();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
+  try{doc=await store.save(doc.id,doc.revision,patch,accountMode?doc:undefined);busy=false;if(accountLocked)return;update();if(!dirty)clearOwnDraft();syncRefresh?.();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(accountLocked)return;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
  visual=mountVisual({paper,body,label,initialRich:doc.rich,onPrintTitle:()=>title.value,onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
@@ -107,16 +133,12 @@ export async function startOffice(runtime=null){
    store=await accountController.verify();
    if(!store){boot.hidden=false;boot.textContent='Verify your THIEPN Account before opening private documents.';root.hidden=true;return;}
    accountMode=true;label.textContent='Account workspace';nav.href=libraryURL();document.querySelector('footer').textContent='Account workspace · local drafts and explicit synchronization. No automatic Hub migration.';
-   const sync=button('Synchronize now',async()=>{if(sync.disabled||accountLocked)return;sync.disabled=true;try{
+   const sync=button('Synchronize now',async()=>{if(sync.disabled||accountLocked||syncRunning)return;sync.disabled=true;syncRunning=true;try{
      const current=await accountController.verify();if(current!==store||accountController.state!=='connected'||accountLocked)return;
-     const docs=await store.list();let remaining=0,conflicts=0;
-     for(const d of docs){if(accountLocked)return;let row=await store.inspect(d.id);if(row?.conflict){conflicts++;continue;}for(let i=0;i<100&&row?.pending.length;i++){if(accountLocked)return;const result=await store.flush(d.id,runtime.transport);if(accountLocked)return;row=await store.inspect(d.id);if(result.status==='conflict'){conflicts++;break;}}remaining+=row?.pending.length??0;
-      // Never replace a document underneath an open editor. Pull only on the library route.
-      if(libraryRefresh&&!row?.pending.length&&!row?.conflict){const remote=await runtime.transport.pull(store.owner,d.id);if(accountLocked)return;if(remote)await store.acceptRemote(remote);const fresh=await store.inspect(d.id);if(fresh?.conflict)conflicts++;}
-     }
+     const {remaining,conflicts}=await synchronizeWorkspace(store,runtime.transport,{discover:!!libraryRefresh,active:()=>!accountLocked});
      if(!accountLocked&&libraryRefresh)await libraryRefresh();
      if(!accountLocked)message.textContent=conflicts?'Cloud conflict · '+conflicts+' document(s); both versions retained.':remaining?'Pending synchronization · '+remaining:'Synchronized queued changes.';
-    }catch{if(!accountLocked)message.textContent='Synchronization unavailable · local edits and queue retained.';}finally{sync.disabled=false;}});
+    }catch{if(!accountLocked)message.textContent='Synchronization unavailable · local edits and queue retained.';}finally{sync.disabled=false;syncRunning=false;}});
    const disconnect=button('Disconnect account',async()=>{if(!confirm('Disconnect this Office session? Saved documents and recovery drafts remain in its private local workspace.'))return;try{await freezeEditor?.();}catch{message.textContent='Recovery storage unavailable. Export the unsaved draft before disconnecting.';return;}try{await accountController.disconnect();}catch{message.textContent='Account disconnected; recovery storage needs attention.';}location.assign('/');});
    controls.append(sync,disconnect);connect.hidden=true;
    syncRefresh=()=>{if(!accountLocked)message.textContent='Saved on this device · synchronization pending';};

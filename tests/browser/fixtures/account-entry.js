@@ -21,6 +21,7 @@ async function fetcher(url,options={}){
  }
  const body=JSON.parse(options.body);
  if(body.p_expected_owner!==who())return reply({},403);
+ if(parsed.pathname.endsWith('/office_sync_manifest')){const prefix='office-fixture-cloud:'+who()+':';return reply(Object.keys(localStorage).filter(k=>k.startsWith(prefix)).map(k=>{const d=JSON.parse(localStorage.getItem(k));return {id:d.id,revision:d.revision};}));}
  if(parsed.pathname.endsWith('/office_sync_push')){
   const op=body.p_operation,storage='office-fixture-cloud:'+who()+':'+op.doc.id,receipt='office-fixture-receipt:'+who()+':'+op.id;
   const old=localStorage.getItem(receipt);if(old)return reply(JSON.parse(old));
