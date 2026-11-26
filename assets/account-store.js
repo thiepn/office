@@ -2,6 +2,8 @@ import {create,revise,Conflict} from './model.js';
 import {ownerId,documentId,validateSyncDocument,operation,validateRemote} from './sync-contract.js';
 // Deliberately separate from the original standalone guest DB and Hub DB.
 export const ACCOUNT_DB='thiepn-office-account-o4-v1';
+function canonical(v){if(Array.isArray(v))return v.map(canonical);if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,canonical(v[k])]));return v;}
+const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 export async function openAccountWorkspace(identity){
  if(identity?.status!=='signed-in')throw new Error('Verified account identity required.');
  const owner=ownerId(identity.id);
@@ -31,7 +33,7 @@ export async function openAccountWorkspace(identity){
   listDrafts(){return run('readonly',(s,done)=>{const q=s.getAll(IDBKeyRange.bound([owner,''],[owner,'\uffff']));q.onsuccess=()=>done(q.result.map(({id,draft})=>({id,draft})));},'drafts');},
   clearDraft(id){return run('readwrite',(s,done)=>{s.delete(key(id));done(true);},'drafts');},
   inspect(id){return run('readonly',(s,done)=>{const q=s.get(key(id));q.onsuccess=()=>done(q.result);});},
-  async acceptRemote(doc){validateSyncDocument(doc);return edit(doc.id,row=>{if(!row)return {owner,id:doc.id,doc,remoteRevision:doc.revision,pending:[],conflict:null};if(row.pending.length||row.conflict)return row;if(doc.revision<row.doc.revision)return row;if(doc.revision===row.doc.revision&&JSON.stringify(doc)!==JSON.stringify(row.doc))return {...row,conflict:{reason:'same-revision divergence',document:doc}};return {...row,doc,remoteRevision:doc.revision};});},
+  async acceptRemote(doc){validateSyncDocument(doc);return edit(doc.id,row=>{if(!row)return {owner,id:doc.id,doc,remoteRevision:doc.revision,pending:[],conflict:null};if(row.pending.length||row.conflict)return row;if(doc.revision<row.doc.revision)return row;if(doc.revision===row.doc.revision&&!equal(doc,row.doc))return {...row,conflict:{reason:'same-revision divergence',document:doc}};return {...row,doc,remoteRevision:doc.revision};});},
   async flush(id,transport){
    // One immutable operation at a time. A response is committed only against the same queue head.
    const row=await api.inspect(id);if(!row||row.conflict||!row.pending.length)return {status:row?.conflict?'conflict':'idle'};

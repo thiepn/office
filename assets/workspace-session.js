@@ -1,10 +1,10 @@
 import {ownerId} from './sync-contract.js';
 import {openAccountWorkspace} from './account-store.js';
 export function workspaceSession(runtime,{onLock=()=>{},onState=()=>{}}={}){
- let owner=null,store=null,epoch=0,closed=false,state='guest',verification=null;
+ let owner=null,store=null,epoch=0,closed=false,state='guest',verification=null,locked=false;
  const session=runtime.session;
  function publish(next){state=next;onState({state,owner});}
- function lock(reason){++epoch;const previous=store;store=null;owner=null;publish(reason);let recovery;try{recovery=onLock(reason,previous);}catch{}return Promise.resolve(recovery).finally(()=>previous?.close());}
+ function lock(reason){locked=true;++epoch;const previous=store;store=null;owner=null;publish(reason);let recovery;try{recovery=onLock(reason,previous);}catch{}return Promise.resolve(recovery).finally(()=>previous?.close());}
  const unsubscribe=session.subscribe(identity=>{
   if(owner===null)return;
   if(identity.status==='unavailable'){publish('offline');return;}
@@ -12,7 +12,7 @@ export function workspaceSession(runtime,{onLock=()=>{},onState=()=>{}}={}){
   else if(state==='offline')publish('connected');
  });
  async function verify(){
-  if(closed)return null;
+  if(closed||locked)return null;
   if(verification)return verification;
   const run=async()=>{const current=epoch;let identity;try{identity=await session.verify();}catch{identity={status:'unavailable'};}
    if(closed||current!==epoch)return null;
@@ -26,5 +26,5 @@ export function workspaceSession(runtime,{onLock=()=>{},onState=()=>{}}={}){
   };
   const flight=run();verification=flight;try{return await flight;}finally{if(verification===flight)verification=null;}
  }
- return Object.freeze({verify,get store(){return store;},get owner(){return owner;},get state(){return state;},async disconnect(){await lock('signed-out');await runtime.disconnect();},dispose(){closed=true;unsubscribe();void lock('locked').catch(()=>{});}});
+ return Object.freeze({verify,get store(){return store;},get owner(){return owner;},get state(){return state;},async disconnect(){try{await lock('signed-out');}finally{await runtime.disconnect();}},dispose(){closed=true;unsubscribe();void lock('locked').catch(()=>{});}});
 }

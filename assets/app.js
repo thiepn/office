@@ -2,7 +2,7 @@ import {openOffice} from './store.js';
 import {richText,parseStructuredFile} from './rich-format.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
-let store,accountMode=false,accountController=null,accountRuntime=null,accountLocked=false,freezeEditor=null,syncRefresh=null;
+let store,accountMode=false,accountController=null,accountRuntime=null,accountLocked=false,freezeEditor=null,syncRefresh=null,libraryRefresh=null;
 const scopeRequested=new URLSearchParams(location.search).get('workspace')==='account';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(label,fn,cls)=>{const b=el('button',label,cls);b.type='button';b.addEventListener('click',fn);return b;};
@@ -48,8 +48,8 @@ async function library(){
    }
   }catch(e){if(run===generation)status(message,e.message,true);}
  }
- if(accountMode){const drafts=await store.listDrafts();if(accountLocked)return;if(drafts.length){const recovery=el('section',undefined,'account-recovery');recovery.append(el('h2','Recovered unsaved drafts'));for(const item of drafts){recovery.append(button('Export draft '+item.id,()=>download('Office recovery',JSON.stringify(item.draft,null,2),true)));}root.prepend(recovery);}}
- await render();
+ if(accountMode){const drafts=await store.listDrafts();if(accountLocked)return;if(drafts.length){const recovery=el('section',undefined,'account-recovery');recovery.append(el('h2','Recovered unsaved drafts'));for(const item of drafts){recovery.append(button('Export draft '+item.draft.documentId,()=>download('Office recovery',JSON.stringify(item.draft,null,2),true)));}root.prepend(recovery);}}
+ libraryRefresh=render;await render();
  window.addEventListener('focus',()=>{if(!list.contains(document.activeElement))render();});
 }
 async function editor(){
@@ -65,7 +65,7 @@ async function editor(){
  const capture=()=>({kind:'thiepn-office-unsaved-draft',documentId:doc.id,baseRevision:doc.revision,title:title.value,body:body.value,rich:visual?.rich??null,recoveryText:visual?.blocked?paper.querySelector('.visual-page')?.innerText??'':null,recordedAt:new Date().toISOString()});
  function queueDraft(){if(!accountMode||accountLocked)return;const sequence=++draftSequence,workspace=store,snapshot=capture();draftFlight=draftFlight.catch(()=>{}).then(()=>workspace.saveDraft(draftId,snapshot)).catch(()=>{if(sequence===draftSequence&&!accountLocked)status(msg,'Draft recovery storage unavailable. Export before leaving.',true);});}
  function clearOwnDraft(){if(!accountMode||accountLocked)return;const workspace=store;++draftSequence;draftFlight=draftFlight.catch(()=>{}).then(()=>workspace.clearDraft(draftId)).catch(()=>{});}
- freezeEditor=()=>{clearTimeout(timer);if(!accountMode||!dirty&&!busy&&!visual?.blocked)return Promise.resolve();const snapshot=capture(),workspace=store;return draftFlight.catch(()=>{}).then(()=>workspace.saveDraft(draftId,snapshot));};
+ freezeEditor=()=>{if(!accountMode||!dirty&&!busy&&!visual?.blocked)return Promise.resolve();clearTimeout(timer);const snapshot=capture(),workspace=store;return draftFlight.catch(()=>{}).then(()=>workspace.saveDraft(draftId,snapshot));};
  const exportBtn=button('Export Markdown',()=>download(title.value,body.value));
  const reload=button('Reload saved version',async()=>{if(!confirm('Discard unsaved local edits and reload the stored version?'))return;clearTimeout(timer);dirty=false;discarding=true;location.reload();});reload.hidden=true;
  const save=button('Save',()=>persist(),'primary');
@@ -102,7 +102,7 @@ export async function startOffice(runtime=null){
    accountController=workspaceSession(runtime,{onState:({state})=>{message.textContent=state==='connected'?'Account workspace · connected':state==='offline'?'Offline · edits remain local':state==='unavailable'?'Account unavailable · private workspace locked':'Account workspace · '+state;},onLock:(reason,previous)=>{
     accountLocked=true;root.hidden=true;root.inert=true;clearInterval(poll);
     const pending=freezeEditor?.();root.replaceChildren();boot.hidden=false;boot.textContent='Account workspace locked. Reconnect to the same account to recover local drafts.';
-    return pending;
+    return Promise.resolve(pending).catch(()=>{boot.textContent='Account workspace locked. Latest recovery write failed; earlier saved revisions and recovery records remain available after reconnection.';throw Error('Recovery storage unavailable.');});
    }});
    store=await accountController.verify();
    if(!store){boot.hidden=false;boot.textContent='Verify your THIEPN Account before opening private documents.';root.hidden=true;return;}
@@ -110,10 +110,14 @@ export async function startOffice(runtime=null){
    const sync=button('Synchronize now',async()=>{if(sync.disabled||accountLocked)return;sync.disabled=true;try{
      const current=await accountController.verify();if(current!==store||accountController.state!=='connected'||accountLocked)return;
      const docs=await store.list();let remaining=0,conflicts=0;
-     for(const d of docs){if(accountLocked)return;let row=await store.inspect(d.id);if(row?.conflict){conflicts++;continue;}for(let i=0;i<100&&row?.pending.length;i++){if(accountLocked)return;const result=await store.flush(d.id,runtime.transport);row=await store.inspect(d.id);if(result.status==='conflict'){conflicts++;break;}}remaining+=row?.pending.length??0;}
+     for(const d of docs){if(accountLocked)return;let row=await store.inspect(d.id);if(row?.conflict){conflicts++;continue;}for(let i=0;i<100&&row?.pending.length;i++){if(accountLocked)return;const result=await store.flush(d.id,runtime.transport);if(accountLocked)return;row=await store.inspect(d.id);if(result.status==='conflict'){conflicts++;break;}}remaining+=row?.pending.length??0;
+      // Never replace a document underneath an open editor. Pull only on the library route.
+      if(libraryRefresh&&!row?.pending.length&&!row?.conflict){const remote=await runtime.transport.pull(store.owner,d.id);if(accountLocked)return;if(remote)await store.acceptRemote(remote);const fresh=await store.inspect(d.id);if(fresh?.conflict)conflicts++;}
+     }
+     if(!accountLocked&&libraryRefresh)await libraryRefresh();
      if(!accountLocked)message.textContent=conflicts?'Cloud conflict · '+conflicts+' document(s); both versions retained.':remaining?'Pending synchronization · '+remaining:'Synchronized queued changes.';
     }catch{if(!accountLocked)message.textContent='Synchronization unavailable · local edits and queue retained.';}finally{sync.disabled=false;}});
-   const disconnect=button('Disconnect account',async()=>{if(!confirm('Disconnect this Office session? Saved documents and recovery drafts remain in its private local workspace.'))return;await accountController.disconnect();location.assign('/');});
+   const disconnect=button('Disconnect account',async()=>{if(!confirm('Disconnect this Office session? Saved documents and recovery drafts remain in its private local workspace.'))return;try{await freezeEditor?.();}catch{message.textContent='Recovery storage unavailable. Export the unsaved draft before disconnecting.';return;}try{await accountController.disconnect();}catch{message.textContent='Account disconnected; recovery storage needs attention.';}location.assign('/');});
    controls.append(sync,disconnect);connect.hidden=true;
    syncRefresh=()=>{if(!accountLocked)message.textContent='Saved on this device · synchronization pending';};
    poll=setInterval(()=>{if(!accountLocked)void accountController.verify().catch(()=>{});},15000);

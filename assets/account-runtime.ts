@@ -4,6 +4,7 @@ import {createOfficeTransport} from './sync-contract.js';
 export const LIVE_ACCOUNT_ENABLED=false;
 export function createOfficeAccountRuntime(config:any, adapters:any={}){
  if(!config||config.issuer!=='https://hycegznamzjhwinegaai.supabase.co')throw Error('Invalid Account issuer.');
+ const redirect=new URL(config.redirectUri);if(!(redirect.href==='https://office.thiepn.dev/auth/callback/'||(['localhost','127.0.0.1'].includes(redirect.hostname)&&redirect.protocol==='http:'&&redirect.pathname==='/auth/callback/'&&!redirect.search&&!redirect.hash)))throw Error('Invalid Office callback.');
  const session=createThiepnAccountSession({issuer:config.issuer,publishableKey:config.publishableKey,clientId:config.clientId,redirectUri:config.redirectUri,storageKey:'thiepn:office:oauth:v1',authPolicy:'guest-first',...adapters.session});
  const sso=createThiepnBrowserSso(session,{accountOrigin:'https://account.thiepn.dev',...adapters.sso});
  // Deliberately no automatic iframe probe or SSO redirect.
