@@ -18,13 +18,20 @@ test('shared SDK PKCE explicit connection, guest separation and local disconnect
  await expect(page.getByText('Start your first document')).toBeVisible();await doc(page,'account private text');await page.getByRole('link',{name:'All documents'}).click();await expect(page.getByRole('link',{name:'Untitled document',exact:true})).toHaveCount(1);
  page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Disconnect account'}).click();await expect(page).toHaveURL(/\/$/);await page.getByRole('link',{name:'Untitled document',exact:true}).click();await expect(page.getByLabel('Document (Markdown)')).toHaveValue('guest private text');
 });
+// Navigation completion alone does not guarantee that the module fixture and library are ready.
+async function setLibraryMode(page,mode){
+ await expect(page.getByRole('button',{name:'Synchronize now'})).toBeEnabled();
+ await expect(page.getByRole('link',{name:'Untitled document',exact:true})).toBeVisible();
+ await page.waitForFunction(()=>typeof window.officeFixture?.setMode==='function');
+ await page.evaluate(value=>window.officeFixture.setMode(value),mode);
+}
 test('offline save, retry and durable conflict export',async({page})=>{
- await connect(page);await doc(page,'local source');await page.getByRole('link',{name:'All documents'}).click();await page.evaluate(()=>window.officeFixture.setMode('offline'));await expect(page.getByText('Offline · edits remain local',{exact:true})).toBeVisible();
+ await connect(page);await doc(page,'local source');await page.getByRole('link',{name:'All documents'}).click();await setLibraryMode(page,'offline');await expect(page.getByText('Offline · edits remain local',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Synchronize now'}).click();await expect(page.getByText('Offline · edits remain local',{exact:true})).toBeVisible();
- await page.evaluate(()=>window.officeFixture.setMode('online'));await expect(page.getByText('Account workspace · connected',{exact:true})).toBeVisible();
+ await setLibraryMode(page,'online');await expect(page.getByText('Account workspace · connected',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Synchronize now'}).click();await expect(page.getByText('Synchronized queued changes.',{exact:true})).toBeVisible();
  await page.getByRole('link',{name:'Untitled document',exact:true}).click();await page.getByLabel('Document (Markdown)').fill('competing local draft');await expect(page.getByRole('status')).toHaveText('Saved locally');await page.getByRole('link',{name:'All documents'}).click();
- await page.evaluate(()=>window.officeFixture.setMode('conflict'));await page.getByRole('button',{name:'Synchronize now'}).click();await expect(page.getByText('Cloud conflict — both versions retained',{exact:true})).toBeVisible();
+ await setLibraryMode(page,'conflict');await page.getByRole('button',{name:'Synchronize now'}).click();await expect(page.getByText('Cloud conflict — both versions retained',{exact:true})).toBeVisible();
  await page.reload();await expect(page.getByRole('button',{name:'Export conflict recovery'})).toBeVisible();const dl=page.waitForEvent('download');await page.getByRole('button',{name:'Export conflict recovery'}).click();const data=JSON.parse(await readFile(await (await dl).path(),'utf8'));expect(data.local.body).toBe('competing local draft');expect(data.remote.body).toBe('Synthetic remote copy');expect(data.pending.length).toBeGreaterThan(0);
 });
 test('identity switch locks old editor and retains owner-specific unsaved recovery',async({page})=>{
