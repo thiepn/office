@@ -60,7 +60,7 @@ export async function makeBatch(plan){
 }
 export function validateBatch(batch,owner){
  owner=ownerId(owner);
- if(!exact(batch,['id','source','scope','sourceDigest','documents'])||!['hub','office'].includes(batch.source)||!(/^[a-f0-9]{64}$/).test(batch.sourceDigest))throw Error('Invalid migration batch.');
+ if(!exact(batch,['id','source','scope','sourceDigest','documents'])||!['hub','office'].includes(batch.source)||typeof batch.sourceDigest!=='string'||!(/^[a-f0-9]{64}$/).test(batch.sourceDigest))throw Error('Invalid migration batch.');
  ownerId(batch.id);validateScope(batch.source,batch.scope);
  if(batch.scope!=='guest'&&batch.scope!=='user:'+owner)throw Error('Source account mismatch.');
  validateRecords('office',batch.documents);

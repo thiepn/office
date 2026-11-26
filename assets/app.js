@@ -1,5 +1,6 @@
 import {openOffice} from './store.js';
 import {synchronizeWorkspace} from './incremental-sync.js';
+import {mountMigrationPanel} from './migration-panel.js';
 import {richText,parseStructuredFile} from './rich-format.js';
 import {selectDocuments,filename,Conflict} from './model.js';
 const root=document.querySelector('#app'),boot=document.querySelector('#boot');
@@ -75,6 +76,7 @@ async function library(){
   }catch(e){if(run===generation)status(message,e.message,true);}
  }
  if(accountMode){const drafts=await store.listDrafts();if(accountLocked)return;if(drafts.length){const recovery=el('section',undefined,'account-recovery');recovery.append(el('h2','Recovered unsaved drafts'));for(const item of drafts){recovery.append(button('Export draft '+item.draft.documentId,()=>download('Office recovery',JSON.stringify(item.draft,null,2),true)));}root.prepend(recovery);}}
+ if(accountMode){root.prepend(mountMigrationPanel({store,transport:accountRuntime.transport,verify:async()=>{const current=await accountController.verify();return current===store&&accountController.state==='connected';},active:()=>!accountLocked,download,onChange:render}));}
  libraryRefresh=render;await render();
  window.addEventListener('focus',()=>{if(!list.contains(document.activeElement))render();});
 }

@@ -39,6 +39,8 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-2-office-sync.sql
           psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-4-discovery.sql
           psql -X -v ON_ERROR_STOP=1 -f server/tests/discovery.sql
+          psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-5-batch-import.sql
+          psql -X -v ON_ERROR_STOP=1 -f server/tests/batch-import.sql
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npx playwright test --config=playwright.postgres.config.js
