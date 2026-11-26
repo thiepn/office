@@ -37,7 +37,7 @@ export async function openAccountWorkspace(identity){
   async markRemoteMissing(id,expected){return edit(id,row=>{if(!row||row.conflict||row.pending.length||!equal(row.doc,expected)||row.remoteRevision===null)return row;return {...row,conflict:{reason:'remote missing',document:null}};});},
   async refreshConflict(id,expected,latest){
    if(latest!==null){validateSyncDocument(latest);if(latest.id!==id)throw Error('Wrong conflict document.');}
-   return edit(id,row=>{if(!row?.conflict||!equal(row,expected))throw new Conflict();return {...row,conflict:{...row.conflict,previousDocuments:[...(row.conflict.previousDocuments??[]),row.conflict.document].slice(-12),document:latest}};});
+   return edit(id,row=>{if(!row?.conflict||!equal(row,expected))throw new Conflict();return {...row,conflict:{...row.conflict,previousDocuments:[...(row.conflict.previousDocuments??[]),row.conflict.document],document:latest}};});
   },
   async resolveConflict(id,expected,choice,latest){
    documentId(id);
@@ -46,7 +46,7 @@ export async function openAccountWorkspace(identity){
    if((choice==='remote'||choice==='fork')&&!latest)throw Error('Cloud version unavailable. Retry or explicitly retain local version.');
    return run('readwrite',(s,done,fail)=>{
     const q=s.get(key(id));q.onsuccess=()=>{try{
-     const row=q.result;if(!row?.conflict||!equal(row,expected))throw new Conflict();
+     const row=q.result;if(!row?.conflict||!equal(row,expected)||!equal(row.conflict.document,latest))throw new Conflict();
      // Archive every divergent local revision, immutable queued operation and previously observed remote version atomically.
      const archive={owner,id:crypto.randomUUID(),documentId:id,recordedAt:new Date().toISOString(),choice,local:row.doc,pending:row.pending,conflict:row.conflict,remote:latest};
      const clean=latest?{owner,id,doc:latest,remoteRevision:latest.revision,pending:[],conflict:null}:null;

@@ -28,6 +28,8 @@ test('independent devices discover remote records, replay lost acknowledgement, 
  const id=new URL(a.url()).searchParams.get('id');await library(a);const initial=await row(a,id);expect(initial.pending.length).toBeGreaterThan(0);
  await a.evaluate(()=>sessionStorage.setItem('office-integration-drop','1'));await sync(a,'Synchronization unavailable · local edits and queue retained.');
  const interrupted=await row(a,id);expect(interrupted.pending[0].id).toBe(initial.pending[0].id);
+ // Independently observe the committed first operation before retrying its lost receipt.
+ await sync(b);const committed=await row(b,id);expect(committed.doc).toEqual(initial.pending[0].doc);expect(committed.remoteRevision).toBe(initial.pending[0].doc.revision);
  // First operation is a blank create. Retry after reload must replay it without creating a duplicate or extra revision.
  await a.reload();await sync(a);expect((await row(a,id)).pending).toHaveLength(0);
  await sync(b);await expect(b.getByRole('link',{name:title,exact:true})).toBeVisible();expect((await row(b,id)).doc).toEqual((await row(a,id)).doc);
