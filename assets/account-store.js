@@ -5,12 +5,12 @@ export const ACCOUNT_DB='thiepn-office-account-o4-v1';
 export async function openAccountWorkspace(identity){
  if(identity?.status!=='signed-in')throw new Error('Verified account identity required.');
  const owner=ownerId(identity.id);
- const db=await new Promise((resolve,reject)=>{const q=indexedDB.open(ACCOUNT_DB,1);q.onupgradeneeded=()=>q.result.createObjectStore('records',{keyPath:['owner','id']});q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);q.onblocked=()=>reject(new Error('Account workspace blocked.'));});
+ const db=await new Promise((resolve,reject)=>{const q=indexedDB.open(ACCOUNT_DB,2);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('records'))q.result.createObjectStore('records',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('drafts'))q.result.createObjectStore('drafts',{keyPath:['owner','id']});};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);q.onblocked=()=>reject(new Error('Account workspace blocked.'));});
  let closed=false;
  db.onversionchange=()=>{closed=true;db.close();};
- function run(mode,fn){
+ function run(mode,fn,table='records'){
   if(closed)return Promise.reject(new Error('Account workspace closed.'));
-  return new Promise((resolve,reject)=>{const tx=db.transaction('records',mode),s=tx.objectStore('records');let result,error;const fail=e=>{error=e;try{tx.abort();}catch{reject(e);}};
+  return new Promise((resolve,reject)=>{const tx=db.transaction(table,mode),s=tx.objectStore(table);let result,error;const fail=e=>{error=e;try{tx.abort();}catch{reject(e);}};
    tx.oncomplete=()=>resolve(result);tx.onerror=tx.onabort=()=>reject(error??tx.error??new Error('Account storage rolled back.'));
    try{fn(s,v=>{result=v;},fail);}catch(e){fail(e);}
   });
@@ -26,6 +26,10 @@ export async function openAccountWorkspace(identity){
   async add(title,body,rich){const doc=create(crypto.randomUUID(),title,body,new Date().toISOString(),rich);await api.importMissing([doc]);return doc;},
   async importMissing(docs){if(!Array.isArray(docs)||!docs.length||docs.length>100)throw new Error('Choose 1–100 documents.');const seen=new Set();const rows=docs.map(d=>{if(seen.has(d.id))throw new Error('Duplicate document ID.');seen.add(d.id);return newRow(d);});return run('readwrite',(s,done)=>{for(const row of rows)s.add(row);done(rows.length);});},
   async save(id,expected,patch){const r=await edit(id,row=>{if(!row)throw new Conflict();const next=revise(row.doc,expected,patch);if(next===row.doc)return row;if(row.pending.length>=100)throw new Error('Offline queue full. Export the draft before continuing.');row.pending.push(operation(crypto.randomUUID(),row.doc.revision,next));row.doc=next;return row;});return r.doc;},
+  saveDraft(id,draft){documentId(id);if(!draft||JSON.stringify(draft).length>16000000)throw Error('Recovery draft exceeds limit.');return run('readwrite',(s,done)=>{s.put({owner,id,draft});done(true);},'drafts');},
+  readDraft(id){return run('readonly',(s,done)=>{const q=s.get(key(id));q.onsuccess=()=>done(q.result?.draft??null);},'drafts');},
+  listDrafts(){return run('readonly',(s,done)=>{const q=s.getAll(IDBKeyRange.bound([owner,''],[owner,'\uffff']));q.onsuccess=()=>done(q.result.map(({id,draft})=>({id,draft})));},'drafts');},
+  clearDraft(id){return run('readwrite',(s,done)=>{s.delete(key(id));done(true);},'drafts');},
   inspect(id){return run('readonly',(s,done)=>{const q=s.get(key(id));q.onsuccess=()=>done(q.result);});},
   async acceptRemote(doc){validateSyncDocument(doc);return edit(doc.id,row=>{if(!row)return {owner,id:doc.id,doc,remoteRevision:doc.revision,pending:[],conflict:null};if(row.pending.length||row.conflict)return row;if(doc.revision<row.doc.revision)return row;if(doc.revision===row.doc.revision&&JSON.stringify(doc)!==JSON.stringify(row.doc))return {...row,conflict:{reason:'same-revision divergence',document:doc}};return {...row,doc,remoteRevision:doc.revision};});},
   async flush(id,transport){

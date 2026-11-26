@@ -3,3 +3,5 @@ playwright-report/
 test-results/
 
 assets/structured-bundle.js
+
+assets/account-bundle.js
