@@ -17,9 +17,9 @@ async function fetcher(url,options={}){
  if(parsed.pathname==='/auth/v1/oauth/token')return reply(token());
  if(parsed.pathname==='/auth/v1/user')return options.headers.Authorization==='Bearer '+bearer?reply({id:owner,email:'fixture@example.invalid'}):reply({},401);
  const name=parsed.pathname.split('/').at(-1);
- if(!['office_sync_push','office_sync_read','office_sync_manifest'].includes(name))throw Error('Unexpected RPC');
+ if(!['office_sync_push','office_sync_read','office_sync_manifest','office_sync_import_batch'].includes(name))throw Error('Unexpected RPC');
  const response=await fetch('/__office_test_rpc',{method:'POST',headers:{'Content-Type':'application/json',Authorization:options.headers.Authorization},body:JSON.stringify({name,args:JSON.parse(options.body)}),signal:options.signal});
- if(name==='office_sync_push'&&response.ok&&sessionStorage.getItem('office-integration-drop')==='1'){
+ if((name==='office_sync_push'||name==='office_sync_import_batch')&&response.ok&&sessionStorage.getItem('office-integration-drop')==='1'){
   // The server has committed before this response is discarded.
   await response.json();sessionStorage.removeItem('office-integration-drop');throw Error('Simulated lost commit acknowledgement');
  }

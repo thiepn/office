@@ -50,6 +50,8 @@ class Handler(SimpleHTTPRequestHandler):
                 call = f"public.office_sync_manifest({owner})"
             elif name == "office_sync_read":
                 call = f"public.office_sync_read({owner},{literal(args['p_document_id'])})"
+            elif name == "office_sync_import_batch":
+                call = f"public.office_sync_import_batch({owner},{literal(json.dumps(args['p_batch']))}::jsonb)"
             elif name == "office_sync_push":
                 call = f"public.office_sync_push({owner},{literal(json.dumps(args['p_operation']))}::jsonb)"
             else:

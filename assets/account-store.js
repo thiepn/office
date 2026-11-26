@@ -1,4 +1,5 @@
 import {create,revise,Conflict} from './model.js';
+import {validateBatch,validateBatchReceipt} from './portable-backup.js';
 import {ownerId,documentId,validateSyncDocument,operation,validateRemote} from './sync-contract.js';
 // Deliberately separate from the original standalone guest DB and Hub DB.
 export const ACCOUNT_DB='thiepn-office-account-o4-v1';
@@ -7,7 +8,7 @@ const equal=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 export async function openAccountWorkspace(identity){
  if(identity?.status!=='signed-in')throw new Error('Verified account identity required.');
  const owner=ownerId(identity.id);
- const db=await new Promise((resolve,reject)=>{const q=indexedDB.open(ACCOUNT_DB,3);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('records'))q.result.createObjectStore('records',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('drafts'))q.result.createObjectStore('drafts',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('archives'))q.result.createObjectStore('archives',{keyPath:['owner','id']});};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);q.onblocked=()=>reject(new Error('Account workspace blocked.'));});
+ const db=await new Promise((resolve,reject)=>{const q=indexedDB.open(ACCOUNT_DB,4);q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('records'))q.result.createObjectStore('records',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('drafts'))q.result.createObjectStore('drafts',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('archives'))q.result.createObjectStore('archives',{keyPath:['owner','id']});if(!q.result.objectStoreNames.contains('migrations'))q.result.createObjectStore('migrations',{keyPath:['owner','id']});};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);q.onblocked=()=>reject(new Error('Account workspace blocked.'));});
  let closed=false;
  db.onversionchange=()=>{closed=true;db.close();};
  function run(mode,fn,table='records'){
@@ -33,6 +34,43 @@ export async function openAccountWorkspace(identity){
   listDrafts(){return run('readonly',(s,done)=>{const q=s.getAll(IDBKeyRange.bound([owner,''],[owner,'\uffff']));q.onsuccess=()=>done(q.result.map(({id,draft})=>({id,draft})));},'drafts');},
   clearDraft(id){return run('readwrite',(s,done)=>{s.delete(key(id));done(true);},'drafts');},
   inspect(id){return run('readonly',(s,done)=>{const q=s.get(key(id));q.onsuccess=()=>done(q.result);});},
+  listMigrations(){return run('readonly',(s,done)=>{const q=s.getAll(IDBKeyRange.bound([owner,''],[owner,'\uffff']));q.onsuccess=()=>done(q.result.map(({owner:_,...job})=>job));},'migrations');},
+  getMigration(id){return run('readonly',(s,done)=>{const q=s.get(key(id));q.onsuccess=()=>{if(!q.result)return done(null);const {owner:_,...job}=q.result;done(job);};},'migrations');},
+  stageMigration(job){
+   validateBatch(job.batch,owner);if(job.id!==job.batch.id||job.state!=='pending'||!(/^[a-f0-9]{64}$/).test(job.digest))throw Error('Invalid recovery job.');
+   return run('readwrite',(records,done,fail)=>{
+    const jobs=records.transaction.objectStore('migrations'),scope=IDBKeyRange.bound([owner,''],[owner,'\uffff']);
+    const a=records.getAllKeys(scope),b=jobs.getAll(scope);
+    let ready=0;function proceed(){if(++ready!==2)return;try{
+     const occupied=new Set(a.result.map(k=>k[1]));
+     for(const j of b.result)if(j.state==='pending')for(const d of j.batch.documents)occupied.add(d.id);
+     if(job.batch.documents.some(d=>occupied.has(d.id)))throw Error('Local or pending migration ID collision.');
+     jobs.add({...job,owner});done(job);
+    }catch(e){fail(e);}}
+    a.onsuccess=proceed;b.onsuccess=proceed;
+   },['records','migrations']);
+  },
+  finishMigration(expected,receipt){
+   validateBatch(expected.batch,owner);validateBatchReceipt(receipt,expected.batch);
+   return run('readwrite',(records,done,fail)=>{
+    const jobs=records.transaction.objectStore('migrations'),q=jobs.get(key(expected.id));
+    q.onsuccess=()=>{try{
+     const current=q.result;if(!current)throw new Conflict();
+     const {owner:_,...job}=current;
+     if(job.state!=='pending'){if(job.digest===expected.digest&&equal(job.receipt,receipt)){done(job);return;}throw new Conflict();}
+     if(!equal(job,expected))throw new Conflict();
+     const finish=()=>{const next={...job,state:receipt.status,receipt};jobs.put({...next,owner});done(next);};
+     if(receipt.status==='blocked'){finish();return;}
+     // Reconcile only missing or exactly matching clean records. Never overwrite a local edit.
+     let remaining=job.batch.documents.length;
+     for(const doc of job.batch.documents){const read=records.get(key(doc.id));read.onsuccess=()=>{try{
+      if(read.result){if(!equal(read.result.doc,doc)||read.result.pending.length||read.result.conflict||read.result.remoteRevision!==doc.revision)throw Error('Cloud import committed; local collision. Recovery job retained.');}
+      else records.add({owner,id:doc.id,doc,remoteRevision:doc.revision,pending:[],conflict:null});
+      if(--remaining===0)finish();
+     }catch(e){fail(e);}};}
+    }catch(e){fail(e);}};
+   },['records','migrations']);
+  },
   listArchives(){return run('readonly',(s,done)=>{const q=s.getAll(IDBKeyRange.bound([owner,''],[owner,'\uffff']));q.onsuccess=()=>done(q.result);},'archives');},
   async markRemoteMissing(id,expected){return edit(id,row=>{if(!row||row.conflict||row.pending.length||!equal(row.doc,expected)||row.remoteRevision===null)return row;return {...row,conflict:{reason:'remote missing',document:null}};});},
   async refreshConflict(id,expected,latest){

@@ -48,5 +48,5 @@ export function createOfficeTransport({session,issuer,publishableKey,fetcher=fet
   const after=await session.verify();if(after.status!=='signed-in'||ownerId(after.id)!==owner)throw new Error('Account changed during synchronization.');
   return payload;
  }
- return Object.freeze({async manifest(owner){return validateManifest(await request(owner,'office_sync_manifest',{}));},async push(owner,op){return validateRemote(await request(owner,'office_sync_push',{p_operation:op}),op);},async pull(owner,id){const d=await request(owner,'office_sync_read',{p_document_id:documentId(id)});if(d!==null){validateSyncDocument(d);if(d.id!==id)throw new Error('Wrong remote record.');}return d;}});
+ return Object.freeze({async importBatch(owner,batch){return request(owner,'office_sync_import_batch',{p_batch:batch});},async manifest(owner){return validateManifest(await request(owner,'office_sync_manifest',{}));},async push(owner,op){return validateRemote(await request(owner,'office_sync_push',{p_operation:op}),op);},async pull(owner,id){const d=await request(owner,'office_sync_read',{p_document_id:documentId(id)});if(d!==null){validateSyncDocument(d);if(d.id!==id)throw new Error('Wrong remote record.');}return d;}});
 }
