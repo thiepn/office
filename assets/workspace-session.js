@@ -7,7 +7,7 @@ export function workspaceSession(runtime,{onLock=()=>{},onState=()=>{}}={}){
  function lock(reason){locked=true;++epoch;const previous=store;store=null;owner=null;publish(reason);let recovery;try{recovery=onLock(reason,previous);}catch{}return Promise.resolve(recovery).finally(()=>previous?.close());}
  const unsubscribe=session.subscribe(identity=>{
   if(owner===null)return;
-  if(identity.status==='unavailable'){publish('offline');return;}
+  if(identity.status==='unavailable'){if(identity.code==='ACCOUNT_SESSION_CHANGED'){void lock('locked').catch(()=>{});return;}publish('offline');return;}
   if(identity.status!=='signed-in'||ownerId(identity.id)!==owner)void lock('locked').catch(()=>{});
   else if(state==='offline')publish('connected');
  });
@@ -16,7 +16,7 @@ export function workspaceSession(runtime,{onLock=()=>{},onState=()=>{}}={}){
   if(verification)return verification;
   const run=async()=>{const current=epoch;let identity;try{identity=await session.verify();}catch{identity={status:'unavailable'};}
    if(closed||current!==epoch)return null;
-   if(identity.status==='unavailable'){publish(owner?'offline':'unavailable');return store;}
+   if(identity.status==='unavailable'){if(identity.code==='ACCOUNT_SESSION_CHANGED'){await lock('locked');return null;}publish(owner?'offline':'unavailable');return store;}
    if(identity.status!=='signed-in'){await lock('signed-out');return null;}
    const id=ownerId(identity.id);if(owner&&id!==owner){await lock('locked');return null;}
    if(store){publish('connected');return store;}

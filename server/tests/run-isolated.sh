@@ -4,6 +4,8 @@ set -euo pipefail
 export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGPASSWORD=office-test-only PGDATABASE=office_test
 psql -X -v ON_ERROR_STOP=1 -f server/tests/account-fixture.sql
 psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-2-office-sync.sql
+psql -X -v ON_ERROR_STOP=1 -f server/proposals/o4-6-production-gate.sql
+psql -X -v ON_ERROR_STOP=1 -f server/release/enable-office.sql
 psql -X -v ON_ERROR_STOP=1 -f server/tests/office-sync.sql
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 for i in 21 22; do
