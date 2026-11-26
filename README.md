@@ -15,3 +15,6 @@ A guarded visual authoring mode is available alongside Markdown source. See [O3.
 
 ## O3.2 structured editor (draft)
 Run npm ci and npm run build (also invoked by npm run dev). See [structured editor contract](docs/o3-2-structured-editor.md).
+
+## O3.3 authoring
+See [authoring contract](docs/o3-3-authoring.md) for typography, layout, document exchange and print boundaries.

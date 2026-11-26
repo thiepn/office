@@ -22,3 +22,24 @@
 @media(max-width:680px){.visual-page-frame{padding:6px}.visual-page{padding:14px;font-size:16px}.visual-toolbar button{flex:1 1 auto}}
 
 .visual-page.ProseMirror{outline-offset:2px;white-space:pre-wrap;min-width:0}.visual-page table{border-collapse:collapse;table-layout:fixed;width:100%;margin:12px 0}.visual-page td,.visual-page th{border:1px solid var(--line);padding:8px;vertical-align:top;min-width:0;overflow-wrap:anywhere}.visual-page th{background:var(--soft)}.visual-page td p,.visual-page th p{margin:0}.visual-page .selectedCell{background:var(--soft)}.visual-toolbar button[aria-pressed=true]{background:var(--soft);border-color:var(--accent)}.visual-page a{text-decoration:underline}.visual-page pre{white-space:pre-wrap;overflow-wrap:anywhere}.visual-page ul ul,.visual-page ol ol{margin-bottom:0}
+
+/* Authoring controls remain accessible at narrow widths; paper layout is continuous. */
+.office-ribbon{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px;display:grid;gap:8px;min-width:0}
+.office-ribbon .visual-toolbar{border:0;padding:0}
+.authoring-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;border-top:1px solid var(--line);padding-top:8px;min-width:0}
+.authoring-controls label{display:grid;gap:3px;font-size:12px;color:var(--muted);min-width:0;flex:1 1 95px}
+.authoring-controls select{min-width:0;width:100%;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:5px;font-size:13px}
+.visual-work{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0}
+.document-outline{border:1px solid var(--line);border-radius:7px;padding:10px;max-height:180px;overflow:auto}
+.document-outline h2{font-size:14px;margin-bottom:5px}.document-outline p{font-size:12px}
+.outline-heading{display:block;width:100%;text-align:left;border:0;min-height:28px;padding:4px 6px;overflow-wrap:anywhere;font-size:13px}
+.outline-heading[data-level="2"]{padding-inline-start:18px}.outline-heading[data-level="3"]{padding-inline-start:30px}
+.visual-page-frame{min-width:0;overflow:auto}.visual-page{width:100%;max-width:var(--office-page-width,210mm);padding:clamp(14px,4vw,var(--office-margin,20mm))}
+.visual-page .tableWrapper{overflow-x:auto}.visual-page td,.visual-page th{min-width:3em}
+@media print{
+ body.office-printing{background:white!important;color:#202820!important}
+ body.office-printing .top,body.office-printing footer,body.office-printing .skip,body.office-printing #app>a,body.office-printing #app>h1,body.office-printing .editor-top,body.office-printing .status,body.office-printing .side,body.office-printing .visual-mode,body.office-printing .visual-note,body.office-printing .paper>button,body.office-printing .office-ribbon,body.office-printing .document-outline,body.office-printing .visual-panel>button{display:none!important}
+ body.office-printing main,body.office-printing #app,body.office-printing .editor-grid,body.office-printing .paper,body.office-printing .visual-panel,body.office-printing .visual-work,body.office-printing .visual-page-frame{display:block!important;margin:0!important;padding:0!important;border:0!important;background:white!important;max-width:none!important;min-height:0!important;overflow:visible!important}
+ body.office-printing .visual-page{width:auto!important;max-width:none!important;min-height:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:white!important;color:#202820!important;outline:0!important}
+ body.office-printing .visual-page table{break-inside:auto}body.office-printing .visual-page tr{break-inside:avoid}body.office-printing .visual-page thead{display:table-header-group}body.office-printing .visual-page h1,body.office-printing .visual-page h2,body.office-printing .visual-page h3{break-after:avoid}
+}
