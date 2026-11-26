@@ -43,3 +43,5 @@
  body.office-printing .visual-page{width:auto!important;max-width:none!important;min-height:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:white!important;color:#202820!important;outline:0!important}
  body.office-printing .visual-page table{break-inside:auto}body.office-printing .visual-page tr{break-inside:avoid}body.office-printing .visual-page thead{display:table-header-group}body.office-printing .visual-page h1,body.office-printing .visual-page h2,body.office-printing .visual-page h3{break-after:avoid}
 }
+
+.account-panel{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);font-size:12px}.account-panel p{margin:0}.account-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.account-recovery{padding:12px;border:1px solid var(--line);border-radius:8px;margin-bottom:12px}.account-recovery button{margin:4px}.account-actions button{font-size:12px}.account-actions a{font-size:12px}@media print{body.office-printing .account-panel{display:none!important}}

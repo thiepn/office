@@ -1,0 +1,11 @@
+{
+  "repository": "thiepn/account",
+  "commit": "746f4ffe747dfea615c8b3c871a65305ef003b73",
+  "source": "packages/account-session",
+  "blobs": {
+    "src/index.ts": "ae0a99369476b2d114de4b57528e212b460bb551",
+    "src/browser-sso.ts": "30dd645a93955671021e24d8999c2988a5303e34",
+    "LICENSE": "7a3093d3cfdeb453457189c3b46f5cd594f1daab",
+    "package.json": "a0cb26f238960c7c543cd9b64877a89625337528"
+  }
+}
