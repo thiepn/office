@@ -1,7 +1,14 @@
 import {test,expect} from '@playwright/test';
 async function open(page){await page.goto('/');await page.getByRole('button',{name:'New document'}).click();await page.getByLabel('Document (Markdown)').fill('# Overview\n\nOriginal source');await expect(page.getByRole('status')).toHaveText('Saved locally');page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Upgrade to structured document'}).click();await expect(page.getByRole('textbox',{name:'Visual document'})).toBeVisible();await expect(page.getByRole('status')).toHaveText('Saved locally');}
 test('authoring typography and page settings survive reload with original Markdown',async({page})=>{
- await open(page);const p=page.locator('.ProseMirror p').first();await p.click();await page.keyboard.press('Home');await page.keyboard.press('Shift+End');
+ await open(page);const p=page.locator('.ProseMirror p').first();
+ // Wait for the editor's initial asynchronous focus, then select the actual paragraph.
+ // Home/Shift+End is dependent on the rendered line and the current caret position.
+ await expect(page.getByRole('textbox',{name:'Visual document'})).toBeFocused();
+ await p.click();
+ await p.evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
+ await expect.poll(()=>p.evaluate(el=>{const s=window.getSelection();return s&&el.contains(s.anchorNode)&&el.contains(s.focusNode)?s.toString():'';})).toBe('Original source');
+ await expect(page.getByRole('button',{name:'Normal',exact:true})).toHaveAttribute('aria-pressed','true');
  await page.getByLabel('Font family').selectOption('sans');await expect(p.locator('[data-office-font="sans"]')).toHaveText('Original source');
  await page.getByLabel('Font size').selectOption('18');await expect(p.locator('[data-office-size="18"]')).toHaveText('Original source');
  await page.getByLabel('Text color').selectOption('blue');await expect(p.locator('[data-office-color="blue"]')).toHaveText('Original source');
