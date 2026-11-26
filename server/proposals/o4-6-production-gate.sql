@@ -60,7 +60,7 @@ $$;
 -- Enforce core ProseMirror child grammar in addition to the existing node/attribute allowlist.
 -- This is not a replacement for full editor-schema compatibility qualification.
 create function office_private.check_tree_shape(root jsonb)
-returns void language plpgsql set search_path='' as $
+returns void language plpgsql set search_path='' as $$
 declare total_nodes bigint; total_text bigint; invalid boolean;
 begin
  with recursive walk(n) as (
@@ -85,10 +85,10 @@ begin
   else true end
  ),false) into total_nodes,total_text,invalid from shape;
  if invalid or total_nodes>30000 or total_text>200000 then raise exception 'invalid_structured_content_grammar' using errcode='22023';end if;
-end $;
+end $$;
 revoke all on function office_private.check_tree_shape(jsonb) from public,anon,authenticated;
 create or replace function office_private.check_snapshot(d jsonb)
-returns void language plpgsql set search_path='' as $
+returns void language plpgsql set search_path='' as $$
 declare rich jsonb:=d->'rich'; lay jsonb;
 begin
  if jsonb_typeof(d) is distinct from 'object' or not office_private.valid_revision(d->'revision') or jsonb_typeof(d->'title') is distinct from 'string' or length(d->>'title') not between 1 and 120 or btrim(d->>'title')='' or jsonb_typeof(d->'body') is distinct from 'string' or length(d->>'body')>200000 or jsonb_typeof(d->'trashed') is distinct from 'boolean' then raise exception 'invalid_document_snapshot' using errcode='22023'; end if;
@@ -102,5 +102,5 @@ begin
   perform office_private.check_node(rich->'content',0);
   perform office_private.check_tree_shape(rich->'content');
  end if;
-end $;
+end $$;
 commit;
