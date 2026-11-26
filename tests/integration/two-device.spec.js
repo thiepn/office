@@ -8,7 +8,7 @@ async function device(browser,kind){
  await context.route('**/assets/callback.js',r=>r.fulfill({contentType:'text/javascript',body:"import '/tests/integration/fixtures/postgres-entry.js';"}));
  await context.route('https://**/*',r=>r.abort());
  const page=await context.newPage();await page.goto('/');await page.getByRole('button',{name:'Connect THIEPN Account'}).click();
- await expect(page).toHaveURL(/workspace=account/);await expect(page.getByRole('button',{name:'Synchronize now'})).toBeEnabled();
+ await expect.poll(async()=>{const callback=page.locator('#callback-state');if(await callback.count()){const message=await callback.textContent();if(message?.startsWith('Synthetic callback rejected'))return message;}return new URL(page.url()).searchParams.get('workspace');},{message:'Synthetic OAuth callback must establish a verified account workspace'}).toBe('account');await expect(page.getByRole('button',{name:'Synchronize now'})).toBeEnabled();
  return {context,page};
 }
 async function library(page){await page.goto('/?workspace=account');await expect(page.getByRole('button',{name:'Synchronize now'})).toBeEnabled();}

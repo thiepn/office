@@ -11,7 +11,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENV = dict(os.environ, PGHOST="127.0.0.1", PGPORT="5432", PGUSER="postgres",
            PGPASSWORD="office-test-only", PGDATABASE="office_test")
 # Two independent sessions for owner A; separate owner B.
-IDENTITIES = {"device-a": (1, 1), "device-b": (1, 4), "other-owner": (2, 2)}
+IDENTITIES = {"office-isolated-fixture-device-a": (1, 1),
+              "office-isolated-fixture-device-b": (1, 4),
+              "office-isolated-fixture-other-owner": (2, 2)}
 def literal(value):
     # Encode all untrusted values as hex, never interpolate raw SQL text.
     return "pg_catalog.convert_from(pg_catalog.decode('" + value.encode("utf-8").hex() + "','hex'),'UTF8')"
