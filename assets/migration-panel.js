@@ -16,7 +16,7 @@ export function mountMigrationPanel({store,transport,verify,active,download,onCh
  const exportBtn=action('Export document backup',async()=>{
   await connected();const docs=await store.list();assertActive();
   const out=await createPortableBackup('office','user:'+store.owner,docs);assertActive();
-  download('Office document backup',JSON.stringify(out,null,2),true);message.textContent='Portable document backup exported.';
+  download('Office document backup',JSON.stringify(out),true);message.textContent='Portable document backup exported.';
  });
  async function refreshJobs(){
   const records=await store.listMigrations();assertActive();jobs.replaceChildren(el('h3','Migration recovery jobs'));
@@ -29,7 +29,7 @@ export function mountMigrationPanel({store,transport,verify,active,download,onCh
    jobs.append(row);
   }
  }
- input.addEventListener('change',()=>{const file=input.files?.[0];backup=null;confirmation.value='';confirmation.disabled=true;start.disabled=true;preview.replaceChildren();if(!file)return;void run(async()=>{
+ input.addEventListener('change',()=>{const file=input.files?.[0];input.value='';if(busy)return;backup=null;confirmation.value='';confirmation.disabled=true;start.disabled=true;preview.replaceChildren();if(!file)return;void run(async()=>{
   if(file.size>MAX_BACKUP_BYTES)throw Error('Backup exceeds size limit.');
   const verified=await parsePortableBackup(await file.text());assertActive();
   // Verify actual editor grammar for every structured snapshot, including history.
