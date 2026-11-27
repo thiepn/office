@@ -16,3 +16,5 @@ Current export boundaries: unsupported math commands or malformed math fail clos
 ## Qualification
 
 Preserve all 272 O5.3 checks. Additional publication unit and browser tests, including O5.3-Q01 file picker, must pass. Compile representative documents with all three templates and visually inspect generated PDF pages before qualification.
+
+The existing Quality workflow additionally runs `node tests/compile-publication.mjs` with free TeX Live and Poppler, verifies the actual exported documents, extracts text and rasterizes pages. The artifact is named `office-publication-evidence`. The same command runs locally with the installed tools; rasterized pages require human visual review.
