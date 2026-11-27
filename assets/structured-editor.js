@@ -34,7 +34,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  const structuredExport=button('Export structured JSON',()=>{if(rich)onRichExport(rich);});structuredExport.hidden=true;
  const ribbon=el('div');ribbon.className='office-ribbon';const typography=el('div');typography.className='authoring-controls';const pageSettings=el('div');pageSettings.className='authoring-controls';const outline=el('nav');outline.className='document-outline';outline.setAttribute('aria-label','Document outline');const outlineTitle=el('h2','Document outline');const outlineList=el('div');outline.append(outlineTitle,outlineList);const work=el('div');work.className='visual-work';work.append(outline,frame);ribbon.append(tools,typography,pageSettings);panel.append(ribbon,work,recovery);paper.prepend(controls,note,structuredExport);paper.append(panel);
  let active=false,blocked=false,editor=null,rich=initialRich??null,composing=false,selectionControls=[],layout=initialRich?.layout??null;
- const equationDialog=createEquationDialog(doc,panel,message=>{note.textContent=message;});
+ const equationDialog=createEquationDialog(doc,panel,message=>{note.textContent=message;},content=>validateRich({...rich,content}));
  const equationExport=button('Export equation sources',()=>{if(rich&&onEquationExport)onEquationExport(equationSourceExport(rich.content));});tools.append(equationExport);
  const layoutStyle=el('style');layoutStyle.dataset.officePrint='';doc.head.append(layoutStyle);
  function applyLayout(){const p=layout??DEFAULT_LAYOUT;frame.style.setProperty('--office-page-width',pageWidth(p)+'mm');frame.style.setProperty('--office-margin',p.margin+'mm');layoutStyle.textContent='@page { size: '+p.paper+' '+p.orientation+'; margin: '+p.margin+'mm; }';}

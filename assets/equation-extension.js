@@ -2,7 +2,7 @@ import {Node} from '@tiptap/core';
 import {Plugin,PluginKey,NodeSelection} from '@tiptap/pm/state';
 import {Decoration,DecorationSet} from '@tiptap/pm/view';
 import katex from 'katex';
-import {validateEquation,isEquation,EQUATION_LIMIT} from './equation-format.js';
+import {validateEquation,isEquation,EQUATION_LIMIT,EQUATION_COUNT_LIMIT} from './equation-format.js';
 
 const key=new PluginKey('officeEquationNumbering');
 function numbers(doc){
@@ -25,8 +25,8 @@ function equationNode(display){
   addAttributes(){return {latex:{default:''},...(display?{numbered:{default:true}}:{})};},
   renderHTML({node}){return [display?'div':'span',{'data-office-equation':name},node.attrs.latex];},
   renderText({node}){return node.attrs.latex;},
-  addNodeView(){return ({node,decorations,editor,getPos})=>{
-   const doc=editor.view.dom.ownerDocument,dom=doc.createElement(display?'div':'span');
+  addNodeView(){return ({node,decorations,editor,getPos,view})=>{
+   const doc=view.dom.ownerDocument,dom=doc.createElement(display?'div':'span');
    dom.className='office-equation '+(display?'office-equation-display':'office-equation-inline');dom.dataset.officeEquation=name;dom.contentEditable='false';
    const math=doc.createElement('span');math.className='office-equation-math';
    const number=doc.createElement('span');number.className='office-equation-number';dom.append(math,number);
@@ -53,7 +53,7 @@ function equationNode(display){
 }
 export const InlineEquation=equationNode(false),DisplayEquation=equationNode(true);
 export function selectedEquation(editor){const s=editor.state.selection;return s instanceof NodeSelection&&isEquation(s.node.type.name)?{pos:s.from,node:s.node}:null;}
-export function createEquationDialog(doc,container,onError){
+export function createEquationDialog(doc,container,onError,validateContent){
  const dialog=doc.createElement('dialog');dialog.className='office-equation-dialog';dialog.setAttribute('aria-labelledby','office-equation-heading');
  const form=doc.createElement('form');form.method='dialog';
  function el(tag,text){const x=doc.createElement(tag);if(text!==undefined)x.textContent=text;return x;}
@@ -83,8 +83,8 @@ export function createEquationDialog(doc,container,onError){
    tr.doc.check();
    const content=tr.doc.toJSON();
    let count=0;tr.doc.descendants(n=>{if(isEquation(n.type.name))count++;});
-   if(count>128)throw Error('Maximum 128 equations per document.');
-   // Source size and full structured snapshot checks also run in the regular save path.
+   if(count>EQUATION_COUNT_LIMIT)throw Error('Maximum 128 equations per document.');
+   validateContent(content);
    editor.view.dispatch(tr.scrollIntoView());dialog.close();editor.view.focus();
   }catch(e){message.textContent=e.message;onError(e.message);}
  });
