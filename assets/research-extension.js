@@ -10,9 +10,9 @@ function indexDoc(doc){
   if(n.type.name==='researchCatalog'){
    catalogPos=pos;
    const entries=idx.ordered.map(id=>({number:idx.numbers.get(id),text:sourceText(idx.sources.get(id))}));
-   decos.push(Decoration.node(pos,pos+n.nodeSize,{}, {entries,count:idx.sources.size}));
+   decos.push(Decoration.node(pos,pos+n.nodeSize,{'data-cited-order':idx.ordered.join(',')}, {entries,count:idx.sources.size}));
   }else if(n.type.name==='researchCitation'){
-   const id=n.attrs.sourceId;decos.push(Decoration.node(pos,pos+n.nodeSize,{}, {caption:citationText(idx,id),resolved:idx.sources.has(id),title:idx.sources.get(id)?.fields.title??'Missing citation source'}));
+   const id=n.attrs.sourceId;decos.push(Decoration.node(pos,pos+n.nodeSize,{'data-citation-caption':citationText(idx,id),'data-citation-title':idx.sources.get(id)?.fields.title??''}, {caption:citationText(idx,id),resolved:idx.sources.has(id),title:idx.sources.get(id)?.fields.title??'Missing citation source'}));
   }
  });
  return {...idx,catalogPos,decos:DecorationSet.create(doc,decos)};
