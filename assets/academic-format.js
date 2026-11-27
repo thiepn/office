@@ -1,4 +1,5 @@
 // Stable semantic targets; display numbers are derived, never persisted.
+import {validateEquation} from './equation-format.js';
 export const ACADEMIC_KINDS=Object.freeze(['definition','theorem','lemma','proposition','corollary','proof']);
 export const BLOCK_LIMIT=256,REFERENCE_LIMIT=1024;
 const idPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -14,14 +15,17 @@ export function validateAcademicAttrs(type,a){
  return a;
 }
 export function academicIndex(root){
- const targets=new Map(),labels=new Set();let number=0,refs=0;
+ const targets=new Map(),labels=new Set(),ids=new Set();let number=0,refs=0,equationNumber=0,blocks=0;
  function walk(n,parent){
   if(n.type==='academicBlock'){
    validateAcademicAttrs(n.type,n.attrs);
    if(parent!=='doc'||n.text!==undefined||n.marks!==undefined||!Array.isArray(n.content)||!n.content.length||n.content[0].type!=='paragraph')throw Error('Academic blocks require a top-level paragraph-first body.');
    const {id,kind,label}=n.attrs;
-   if(targets.has(id)||labels.has(label)||targets.size>=BLOCK_LIMIT)throw Error('Duplicate academic ID or label, or block limit exceeded.');
-   labels.add(label);targets.set(id,{id,kind,label,number:kind==='proof'?null:++number});
+   if(ids.has(id)||labels.has(label)||++blocks>BLOCK_LIMIT)throw Error('Duplicate academic ID or label, or block limit exceeded.');
+   ids.add(id);labels.add(label);targets.set(id,{id,kind,label,number:kind==='proof'?null:++number});
+  }else if(n.type==='displayEquation'){
+   const {id,numbered}=validateEquation(n.type,n.attrs);if(numbered)equationNumber++;
+   if(id!=null){if(ids.has(id))throw Error('Duplicate academic or equation ID.');ids.add(id);if(numbered)targets.set(id,{id,kind:'equation',label:'eq-'+id,number:equationNumber});}
   }else if(n.type==='academicReference'){
    validateAcademicAttrs(n.type,n.attrs);
    if(!['paragraph','heading'].includes(parent)||n.text!==undefined||n.content!==undefined||n.marks!==undefined||++refs>REFERENCE_LIMIT)throw Error('Invalid academic reference placement or limit.');
@@ -30,7 +34,7 @@ export function academicIndex(root){
  }
  walk(root,null);return targets;
 }
-export function targetText(t){return t?kindName(t.kind)+(t.number===null?' ['+t.label+']':' '+t.number):'[Unresolved reference]';}
+export function targetText(t){if(t?.kind==='equation')return 'Equation ('+t.number+')';return t?kindName(t.kind)+(t.number===null?' ['+t.label+']':' '+t.number):'[Unresolved reference]';}
 export function academicText(node,targets){
  if(node.type==='academicReference')return targetText(targets.get(node.attrs.targetId))+' {ref:'+node.attrs.targetId+'}';
  if(node.type==='academicBlock')return targetText(targets.get(node.attrs.id))+' ['+node.attrs.label+']';

@@ -3,6 +3,7 @@ import {validateRich} from './rich-format.js';
 import {academicIndex,kindName} from './academic-format.js';
 import {researchIndex,sourceText} from './research-format.js';
 import {DEFAULT_LAYOUT} from './authoring-format.js';
+import {publicationTable} from './publication-table.js';
 
 export const PUBLICATION_TEMPLATES=Object.freeze({
  article:{label:'Academic article',className:'article',options:'11pt',heading:['section','subsection','subsubsection']},
@@ -72,17 +73,12 @@ export function exportPublication(rich,{title='Untitled',author='',template='art
    case 'listItem':return '\\item '+children();
    case 'codeBlock':return env('quote',cmd('ttfamily','')+(n.content??[]).map(c=>texText(c.text).replace(/ /g,'\\ ')).join('')+'\\par');
    case 'inlineEquation':return '\\('+publicationMath(n.attrs.latex)+'\\)';
-   case 'displayEquation':return env(n.attrs.numbered?'equation':'equation*',publicationMath(n.attrs.latex));
+   case 'displayEquation':return env(n.attrs.numbered?'equation':'equation*',publicationMath(n.attrs.latex)+(n.attrs.numbered&&n.attrs.id?'\n'+cmd('label',key('eq',n.attrs.id)):''));
    case 'academicBlock':{const {id,kind,label}=n.attrs;const anchor=kind==='proof'?cmd('hypertarget',key('office',id))+'{}':cmd('label',key('office',id));return env(kind,anchor+'\n'+children().trimEnd());}
-   case 'academicReference':{const t=targets.get(n.attrs.targetId);if(!t){warn('Unresolved academic reference: '+n.attrs.targetId);return '\\textbf{[Unresolved reference]}';}return t.kind==='proof'?'\\hyperlink{'+key('office',t.id)+'}{'+texText('Proof ['+t.label+']')+'}':kindName(t.kind)+'~'+cmd('ref',key('office',t.id));}
+   case 'academicReference':{const t=targets.get(n.attrs.targetId);if(!t){warn('Unresolved academic reference: '+n.attrs.targetId);return '\\textbf{[Unresolved reference]}';}if(t.kind==='equation')return 'Equation~'+cmd('eqref',key('eq',t.id));return t.kind==='proof'?'\\hyperlink{'+key('office',t.id)+'}{'+texText('Proof ['+t.label+']')+'}':kindName(t.kind)+'~'+cmd('ref',key('office',t.id));}
    case 'researchCitation':{const id=n.attrs.sourceId;if(!research.sources.has(id)){warn('Missing citation: '+id);return '\\textbf{[Missing citation]}';}return cmd('cite',key('cite',id));}
    case 'researchCatalog':return ''; // one bibliography at the end, independent of catalogue position
-   case 'table':{
-    const rows=n.content??[],cols=rows[0]?.content?.length??0;
-    if(!cols||cols>12||rows.some(r=>r.content?.length!==cols||r.content.some(c=>(c.attrs?.colspan??1)!==1||(c.attrs?.rowspan??1)!==1)))throw Error('Publication export supports rectangular tables with up to 12 columns; split merged cells first.');
-    const body=rows.map(r=>r.content.map(c=>{const s=(c.content??[]).map(p=>{if(p.type!=='paragraph')throw Error('Publication table cells must contain paragraphs.');return (p.content??[]).map(x=>walk(x,depth+1)).join('');}).join('\\newline ');return c.type==='tableHeader'?cmd('textbf',s):s;}).join(' & ')+' \\\\ \\hline').join('\n');
-    return env('tabularx','\\hline\n'+body,'{\\linewidth}{|'+('X|'.repeat(cols))+'}');
-   }
+   case 'table':return publicationTable(n,c=>walk(c,depth+1),warn);
    default:throw Error('Unsupported publication node: '+n.type);
   }
  }
@@ -91,7 +87,7 @@ export function exportPublication(rich,{title='Untitled',author='',template='art
  '\\documentclass['+style.options+']{'+style.className+'}',
  '\\usepackage{fontspec}', '\\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]',
  '\\usepackage['+(layout.paper==='Letter'?'letterpaper':'a4paper')+','+(layout.orientation==='landscape'?'landscape,':'')+'margin='+layout.margin+'mm]{geometry}',
- '\\usepackage{amsmath,amssymb,amsthm}', ...(style.className==='report'?['\\counterwithout{equation}{chapter}']:[]), '\\usepackage{tabularx}', '\\usepackage[normalem]{ulem}', '\\usepackage[hidelinks]{hyperref}',
+ '\\usepackage{amsmath,amssymb,amsthm}', ...(style.className==='report'?['\\counterwithout{equation}{chapter}']:[]), '\\usepackage{array,multirow}', '\\usepackage[normalem]{ulem}', '\\usepackage[hidelinks]{hyperref}',
  '\\newtheorem{theorem}{Theorem}', '\\newtheorem{lemma}[theorem]{Lemma}', '\\newtheorem{proposition}[theorem]{Proposition}', '\\newtheorem{corollary}[theorem]{Corollary}', '\\theoremstyle{definition}', '\\newtheorem{definition}[theorem]{Definition}',
  cmd('title',texText(title)),cmd('author',texText(author)), '\\date{}'
  ].join('\n');
