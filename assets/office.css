@@ -58,7 +58,7 @@
 .office-equation-math math{font-size:1.05em;color:inherit}
 .office-equation-number{font-variant-numeric:tabular-nums;white-space:nowrap}
 .office-equation[data-equation-error]{outline:1px dashed currentColor;white-space:pre-wrap;overflow-wrap:anywhere}
-.office-equation-dialog{max-width:min(640px,calc(100vw - 24px));width:100%;background:var(--paper,#fff);color:var(--ink,#222);border:1px solid var(--line,#aaa);border-radius:10px;padding:20px}
+.office-equation-dialog{max-width:min(640px,calc(100vw - 24px));width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line,#aaa);border-radius:10px;padding:20px}
 .office-equation-dialog::backdrop{background:#0008}
 .office-equation-dialog form{display:grid;gap:12px}
 .office-equation-dialog textarea{display:block;width:100%;box-sizing:border-box;font:inherit;font-family:monospace;resize:vertical}
