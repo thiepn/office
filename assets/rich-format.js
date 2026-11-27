@@ -2,8 +2,9 @@
 import {validTypography,validateLayout,ALIGN,SPACING} from './authoring-format.js';
 import {isEquation,validateEquation,equationRecovery,EQUATION_COUNT_LIMIT} from './equation-format.js';
 import {academicIndex,validateAcademicAttrs,academicText} from './academic-format.js';
+import {researchIndex,validateResearchAttrs,citationText,bibliographyText,sourceText} from './research-format.js';
 export const RICH_VERSION=1;
-const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell','inlineEquation','displayEquation','academicBlock','academicReference']);
+const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell','inlineEquation','displayEquation','academicBlock','academicReference','researchCatalog','researchCitation']);
 const marks=new Set(['bold','italic','code','strike','underline','link','typography']);
 export function safeLink(value){
  if(typeof value!=='string'||value.length>2048||/[\s\x00-\x1f]/u.test(value))return false;
@@ -17,6 +18,7 @@ export function validateRich(rich){
  function visit(n,depth,parent=null){
   if(!n||!nodes.has(n.type)||depth>40||++count>30000||Object.keys(n).some(k=>!['type','attrs','marks','content','text'].includes(k)))throw new Error('Invalid structured document node.');
   if(isEquation(n.type)){if(n.type==='inlineEquation'?!['paragraph','heading'].includes(parent):!['doc','blockquote','listItem','tableCell','tableHeader','academicBlock'].includes(parent))throw Error('Invalid equation placement.');validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
+  if(n.type==='researchCatalog'||n.type==='researchCitation'){validateResearchAttrs(n.type,n.attrs);if(n.content!==undefined||n.text!==undefined||n.marks!==undefined)throw Error('Invalid research node.');return;}
   if(n.type==='academicReference'){validateAcademicAttrs(n.type,n.attrs);if(n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid reference node.');return;}
   if(n.type==='academicBlock'){validateAcademicAttrs(n.type,n.attrs);if(n.text!==undefined||n.marks!==undefined||!Array.isArray(n.content))throw Error('Invalid academic block.');for(const c of n.content)visit(c,depth+1,n.type);return;}
   if(n.attrs!==undefined){
@@ -48,13 +50,14 @@ export function validateRich(rich){
   if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1,n.type);}
  }
  visit(rich.content,0);
- academicIndex(rich.content);
+ academicIndex(rich.content);researchIndex(rich.content);
  if(text>200000||JSON.stringify(rich).length>1000000)throw new Error('Structured document exceeds storage limit.');
  return rich;
 }
 export function richText(node){
  let targets;try{targets=academicIndex(node);}catch{targets=new Map();}
- function walk(n){if(isEquation(n.type))return equationRecovery(n);if(n.type==='text')return n.text;if(n.type==='academicReference')return academicText(n,targets);const body=(n.content??[]).map(walk).join(n.type==='paragraph'||n.type==='heading'?'':' ');return n.type==='academicBlock'?academicText(n,targets)+' '+body:body;}
+ let research;try{research=researchIndex(node);}catch{research={numbers:new Map(),sources:new Map(),ordered:[]};}
+ function walk(n){if(isEquation(n.type))return equationRecovery(n);if(n.type==='text')return n.text;if(n.type==='academicReference')return academicText(n,targets);if(n.type==='researchCitation')return citationText(research,n.attrs.sourceId)+' {cite:'+n.attrs.sourceId+'}';if(n.type==='researchCatalog')return 'Bibliography '+bibliographyText(research)+' Source catalogue '+n.attrs.sources.map(sourceText).join(' ');const body=(n.content??[]).map(walk).join(n.type==='paragraph'||n.type==='heading'?'':' ');return n.type==='academicBlock'?academicText(n,targets)+' '+body:body;}
  return walk(node);
 }
 
