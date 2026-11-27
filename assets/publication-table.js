@@ -21,8 +21,8 @@ export function publicationTable(table,render,warn=()=>{}){
  }
  if(!cols||grid.some(row=>row.length!==cols||Array.from({length:cols},(_,i)=>row[i]).some(v=>!v)))throw Error('Publication table is not rectangular.');
  // Fixed p widths avoid tabularx trial passes re-executing labels and equation counters.
- const unit='\\dimexpr\\linewidth/'+cols+'-2\\tabcolsep-\\arrayrulewidth-'+(cols===1?'\\arrayrulewidth':'\\arrayrulewidth/'+cols)+'\\relax';
- const spanWidth=w=>'\\dimexpr'+w+'\\linewidth/'+cols+'-2\\tabcolsep-2\\arrayrulewidth\\relax';
+ const unit='\\dimexpr\\linewidth/'+cols+'-2\\tabcolsep-\\arrayrulewidth-'+(cols===1?'\\arrayrulewidth':'\\arrayrulewidth/'+cols)+'-1pt\\relax';
+ const spanWidth=w=>'\\dimexpr'+w+'\\linewidth/'+cols+'-2\\tabcolsep-2\\arrayrulewidth-'+w+'pt\\relax';
  const spec=(w,align='left')=>'>{\\'+({left:'raggedright',center:'centering',right:'raggedleft'}[align]??'raggedright')+'\\arraybackslash}p{'+(w===1?unit:spanWidth(w))+'}';
  const lines=['\\hline'];
  for(let r=0;r<grid.length;r++){
