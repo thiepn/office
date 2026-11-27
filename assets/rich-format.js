@@ -13,9 +13,9 @@ export function validateRich(rich){
  if(Object.keys(rich).some(k=>!['version','originalMarkdown','content','layout'].includes(k)))throw new Error('Unknown structured envelope field.');
  if(rich.layout!==undefined)validateLayout(rich.layout);
  let count=0,text=0,equations=0;
- function visit(n,depth){
+ function visit(n,depth,parent=null){
   if(!n||!nodes.has(n.type)||depth>40||++count>30000||Object.keys(n).some(k=>!['type','attrs','marks','content','text'].includes(k)))throw new Error('Invalid structured document node.');
-  if(isEquation(n.type)){validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
+  if(isEquation(n.type)){if(n.type==='inlineEquation'?!['paragraph','heading'].includes(parent):!['doc','blockquote','listItem','tableCell','tableHeader'].includes(parent))throw Error('Invalid equation placement.');validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
   if(n.attrs!==undefined){
    if(!n.attrs||typeof n.attrs!=='object'||Array.isArray(n.attrs))throw new Error('Invalid node attributes.');
    for(const [k,v] of Object.entries(n.attrs)){
@@ -42,7 +42,7 @@ export function validateRich(rich){
     }else if(m.type==='typography'){if(!validTypography(m.attrs))throw new Error('Invalid typography.');}else if(m.attrs&&Object.keys(m.attrs).length)throw new Error('Unsupported mark attributes.');
    }
   }
-  if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1);}
+  if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1,n.type);}
  }
  visit(rich.content,0);
  if(text>200000||JSON.stringify(rich).length>1000000)throw new Error('Structured document exceeds storage limit.');
