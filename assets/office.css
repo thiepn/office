@@ -78,3 +78,17 @@
 .office-academic-reference[data-unresolved="true"]{color:var(--danger);text-decoration-style:dashed}
 .office-academic-dialog input,.office-academic-dialog select{display:block;width:100%;max-width:100%;margin-top:.3rem}
 @media print{.office-academic-block{background:transparent;color:#111;break-inside:avoid}.office-academic-label{display:none}.office-academic-reference{color:#111;text-decoration:none}.office-academic-reference[data-unresolved="true"]{text-decoration:underline}}
+
+/* Document-local citations and a generated bibliography. */
+.office-citation{font-weight:600;color:var(--accent);cursor:pointer}
+.office-citation[data-unresolved="true"]{color:var(--danger);text-decoration:underline dashed}
+.office-bibliography{margin:1.8rem 0;padding-top:1rem;border-top:1px solid var(--line)}
+.office-bibliography h2{margin:.2rem 0 .6rem}
+.office-bibliography li{margin:.4rem 0;overflow-wrap:anywhere}
+.office-bibliography-info,.office-bibliography-empty{color:var(--muted);font-size:.85em}
+.office-research-dialog{max-height:90vh;overflow:auto}
+.office-research-dialog input,.office-research-dialog select,.office-research-dialog textarea{width:100%;max-width:100%}
+.office-research-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.office-research-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.5rem}
+.office-research-fields label{min-width:0}
+@media print{.office-bibliography-info,.office-bibliography-empty{display:none}.office-citation{color:#111}}
