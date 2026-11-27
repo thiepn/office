@@ -1,5 +1,5 @@
 import {Node} from '@tiptap/core';
-import {Plugin,PluginKey,NodeSelection} from '@tiptap/pm/state';
+import {Plugin,PluginKey,NodeSelection,TextSelection} from '@tiptap/pm/state';
 import {Decoration,DecorationSet} from '@tiptap/pm/view';
 import katex from 'katex';
 import {validateEquation,isEquation,EQUATION_LIMIT,EQUATION_COUNT_LIMIT} from './equation-format.js';
@@ -79,7 +79,27 @@ export function createEquationDialog(doc,container,onError,validateContent){
    // Validate candidate transaction before dispatch; prevent an invalid edit becoming unsavable.
    const tr=editor.state.tr;
    if(editing)tr.setNodeMarkup(editing.pos,undefined,node.attrs);
-   else{tr.setSelection(selection.map(tr.doc,tr.mapping));tr.replaceSelectionWith(editor.schema.node(type,node.attrs),false);}
+   else{
+    const inserted=editor.schema.node(type,node.attrs);
+    // Inserting is not editing: a selected equation must never be replaced by the Insert command.
+    if(selection instanceof NodeSelection&&isEquation(selection.node.type.name)){
+     const pos=selection.to;
+     if(selection.node.type.name==='displayEquation'){
+      const block=type==='displayEquation'?inserted:editor.schema.node('paragraph',null,[inserted]);
+      const at=tr.doc.resolve(pos);
+      if(!at.parent.canReplaceWith(at.index(),at.index(),block.type))throw Error('Equation cannot be inserted after the selected equation.');
+      tr.insert(pos,block);
+      if(type==='displayEquation')tr.setSelection(NodeSelection.create(tr.doc,pos));
+      else tr.setSelection(TextSelection.create(tr.doc,pos+1+inserted.nodeSize));
+     }else{
+      tr.setSelection(TextSelection.create(tr.doc,pos));
+      tr.replaceSelectionWith(inserted,false);
+     }
+    }else{
+     tr.setSelection(selection.map(tr.doc,tr.mapping));
+     tr.replaceSelectionWith(inserted,false);
+    }
+   }
    tr.doc.check();
    const content=tr.doc.toJSON();
    let count=0;tr.doc.descendants(n=>{if(isEquation(n.type.name))count++;});

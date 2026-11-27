@@ -18,11 +18,12 @@ test('inline and display math render, edit, renumber and preserve original sourc
  await page.locator('.ProseMirror p').first().click();await page.keyboard.press('End');
  await equation(page,false,'x^2');await expect(page.locator('.office-equation-inline math')).toHaveCount(1);
  await equation(page,true,'\\frac{1}{2}');
+ await expect(page.locator('.ProseMirror .office-equation-display')).toHaveCount(1);
  await equation(page,true,'\\int_0^1 x\\,dx');
  const rows=page.locator('.ProseMirror .office-equation-display');
  await expect(rows).toHaveCount(2);await expect(rows.locator('.office-equation-number')).toHaveText(['(1)','(2)']);
  await rows.first().click();await page.getByRole('button',{name:'Edit selected equation'}).click();
- await expect(page.getByLabel('Equation LaTeX')).not.toBeEmpty();
+ await expect(page.getByLabel('Equation LaTeX')).toHaveValue('\\frac{1}{2}');
  await page.getByLabel('Equation LaTeX').fill('\\sqrt{2}');await page.getByLabel('Automatic equation number').uncheck();
  await page.getByRole('button',{name:'Apply equation'}).click();await expect(page.getByRole('status')).toHaveText('Saved locally');
  await expect(rows.locator('.office-equation-number')).toHaveText(['','(1)']);
@@ -31,7 +32,9 @@ test('inline and display math render, edit, renumber and preserve original sourc
  const dl=page.waitForEvent('download');await page.getByRole('button',{name:'Export structured JSON'}).click();
  const json=JSON.parse(await readFile(await (await dl).path(),'utf8'));
  expect(json.rich.originalMarkdown).toBe('Original source');
- expect(JSON.stringify(json.rich.content)).toContain('sqrt');
+ const formulas=json.rich.content.content.flatMap(n=>n.type==='displayEquation'?[n]:n.content?.filter(c=>c.type==='inlineEquation')??[]);
+ expect(formulas.map(n=>n.attrs.latex)).toEqual(expect.arrayContaining(['x^2','\\sqrt{2}','\\int_0^1 x\\,dx']));
+ expect(formulas.filter(n=>n.type==='displayEquation').map(n=>n.attrs.numbered)).toEqual([false,true]);
  const source=page.waitForEvent('download');await page.getByRole('button',{name:'Export equation sources'}).click();expect(await readFile(await (await source).path(),'utf8')).toContain('\\sqrt{2}');
  await page.getByRole('button',{name:'Markdown source'}).click();await expect(page.getByLabel('Document (Markdown)')).toHaveValue('Original source');
 });
