@@ -7,11 +7,13 @@ import {sourceToJSON,jsonToSource} from './visual.js';
 import {safeLink,validateRich,richText} from './rich-format.js';
 import {InlineEquation,DisplayEquation,selectedEquation,createEquationDialog} from './equation-extension.js';
 import {equationSourceExport,equationInventory} from './equation-format.js';
+import {AcademicIndex,AcademicBlock,AcademicReference,createAcademicDialog,currentAcademic,currentReference} from './academic-extension.js';
+import {academicIndex,targetText} from './academic-format.js';
 
 function officeExtensions(){return [
    StarterKit.configure({heading:{levels:[1,2,3]},trailingNode:false,link:{openOnClick:false,autolink:false,linkOnPaste:false,HTMLAttributes:{target:'_blank',rel:'noopener noreferrer'},isAllowedUri:(url,ctx)=>safeLink(url)&&ctx.defaultValidate(url)}}),
    TableKit.configure({table:{resizable:false}}),
-  Typography,ParagraphStyle,InlineEquation,DisplayEquation];}
+  Typography,ParagraphStyle,InlineEquation,DisplayEquation,AcademicBlock,AcademicReference,AcademicIndex];}
 export function validateStructuredImport(rich){
  validateRich(rich);const schema=getSchema(officeExtensions());const node=schema.nodeFromJSON(rich.content);node.check();
  // Reject a payload that would lose any supplied node or mark attributes.
@@ -34,6 +36,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  const structuredExport=button('Export structured JSON',()=>{if(rich)onRichExport(rich);});structuredExport.hidden=true;
  const ribbon=el('div');ribbon.className='office-ribbon';const typography=el('div');typography.className='authoring-controls';const pageSettings=el('div');pageSettings.className='authoring-controls';const outline=el('nav');outline.className='document-outline';outline.setAttribute('aria-label','Document outline');const outlineTitle=el('h2','Document outline');const outlineList=el('div');outline.append(outlineTitle,outlineList);const work=el('div');work.className='visual-work';work.append(outline,frame);ribbon.append(tools,typography,pageSettings);panel.append(ribbon,work,recovery);paper.prepend(controls,note,structuredExport);paper.append(panel);
  let active=false,blocked=false,editor=null,rich=initialRich??null,composing=false,selectionControls=[],layout=initialRich?.layout??null;
+ const academicDialog=createAcademicDialog(doc,panel,content=>validateRich({...rich,content}),message=>{note.textContent=message;});
  const equationDialog=createEquationDialog(doc,panel,message=>{note.textContent=message;},content=>validateRich({...rich,content}));
  const equationExport=button('Export equation sources',()=>{if(rich&&onEquationExport)onEquationExport(equationSourceExport(rich.content));});tools.append(equationExport);
  const layoutStyle=el('style');layoutStyle.dataset.officePrint='';doc.head.append(layoutStyle);
@@ -104,6 +107,10 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  tool('Insert inline equation',e=>{equationDialog.open(e,'inlineEquation');return false;},{richOnly:true});
  tool('Insert display equation',e=>{equationDialog.open(e,'displayEquation');return false;},{richOnly:true});
  tool('Edit selected equation',e=>{const selection=selectedEquation(e);if(selection)equationDialog.open(e,selection.node.type.name,selection);return false;},{richOnly:true,can:e=>!!selectedEquation(e)});
+ tool('Insert academic block',e=>{academicDialog.open(e,'block');return false;},{richOnly:true});
+ tool('Edit academic block',e=>{const t=currentAcademic(e);if(t)academicDialog.open(e,'block',t);return false;},{richOnly:true,can:e=>!!currentAcademic(e)});
+ tool('Insert cross-reference',e=>{academicDialog.open(e,'reference');return false;},{richOnly:true,can:e=>academicIndex(e.getJSON()).size>0});
+ tool('Edit cross-reference',e=>{const t=currentReference(e);if(t)academicDialog.open(e,'reference',t);return false;},{richOnly:true,can:e=>!!currentReference(e)});
  tool('Insert table',e=>e.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run(),{richOnly:true});
  for(const [name,cmd] of [['Add row','addRowAfter'],['Add column','addColumnAfter'],['Delete row','deleteRow'],['Delete column','deleteColumn'],['Delete table','deleteTable'],['Merge cells','mergeCells'],['Split cell','splitCell']])tool(name,e=>e.chain().focus()[cmd]().run(),{richOnly:true,can:e=>e.can()[cmd]()});
  tool('Undo',e=>e.chain().focus().undo().run(),{can:e=>e.can().undo()});

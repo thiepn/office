@@ -64,3 +64,17 @@
 .office-equation-dialog textarea{display:block;width:100%;box-sizing:border-box;font:inherit;font-family:monospace;resize:vertical}
 .office-equation-preview{min-height:2em;overflow:auto;padding:10px;border:1px solid var(--line,#aaa);text-align:center}
 @media print{.office-equation-dialog{display:none!important}.office-equation.ProseMirror-selectednode{outline:none!important}.office-equation-display .office-equation-math{overflow:visible}}
+
+/* O5.2 academic blocks retain editable rich bodies; captions are derived decorations. */
+.office-academic-block{border-left:3px solid var(--accent);padding:.65rem 1rem;margin:1.2rem 0;background:var(--soft);border-radius:0 5px 5px 0;break-inside:avoid}
+.office-academic-header{display:flex;gap:.7rem;align-items:baseline;flex-wrap:wrap;cursor:pointer;margin-bottom:.4rem;user-select:none}
+.office-academic-caption{font-weight:700}
+.office-academic-label{font:11px/1.4 monospace;color:var(--muted);overflow-wrap:anywhere}
+.office-academic-body{min-height:1.5em}
+.office-academic-body>p:first-child{margin-top:0}
+.office-academic-block[data-academic-kind="proof"]{background:transparent;border-left-color:var(--line)}
+.office-academic-block[data-academic-kind="proof"] .office-academic-body:after{content:"□";display:block;text-align:right}
+.office-academic-reference{color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.office-academic-reference[data-unresolved="true"]{color:var(--danger);text-decoration-style:dashed}
+.office-academic-dialog input,.office-academic-dialog select{display:block;width:100%;max-width:100%;margin-top:.3rem}
+@media print{.office-academic-block{background:transparent;color:#111;break-inside:avoid}.office-academic-label{display:none}.office-academic-reference{color:#111;text-decoration:none}.office-academic-reference[data-unresolved="true"]{text-decoration:underline}}

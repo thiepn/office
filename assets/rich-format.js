@@ -1,8 +1,9 @@
 // Versioned structured document envelope; original source remains immutable.
 import {validTypography,validateLayout,ALIGN,SPACING} from './authoring-format.js';
 import {isEquation,validateEquation,equationRecovery,EQUATION_COUNT_LIMIT} from './equation-format.js';
+import {academicIndex,validateAcademicAttrs,academicText} from './academic-format.js';
 export const RICH_VERSION=1;
-const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell','inlineEquation','displayEquation']);
+const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell','inlineEquation','displayEquation','academicBlock','academicReference']);
 const marks=new Set(['bold','italic','code','strike','underline','link','typography']);
 export function safeLink(value){
  if(typeof value!=='string'||value.length>2048||/[\s\x00-\x1f]/u.test(value))return false;
@@ -15,7 +16,9 @@ export function validateRich(rich){
  let count=0,text=0,equations=0;
  function visit(n,depth,parent=null){
   if(!n||!nodes.has(n.type)||depth>40||++count>30000||Object.keys(n).some(k=>!['type','attrs','marks','content','text'].includes(k)))throw new Error('Invalid structured document node.');
-  if(isEquation(n.type)){if(n.type==='inlineEquation'?!['paragraph','heading'].includes(parent):!['doc','blockquote','listItem','tableCell','tableHeader'].includes(parent))throw Error('Invalid equation placement.');validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
+  if(isEquation(n.type)){if(n.type==='inlineEquation'?!['paragraph','heading'].includes(parent):!['doc','blockquote','listItem','tableCell','tableHeader','academicBlock'].includes(parent))throw Error('Invalid equation placement.');validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
+  if(n.type==='academicReference'){validateAcademicAttrs(n.type,n.attrs);if(n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid reference node.');return;}
+  if(n.type==='academicBlock'){validateAcademicAttrs(n.type,n.attrs);if(n.text!==undefined||n.marks!==undefined||!Array.isArray(n.content))throw Error('Invalid academic block.');for(const c of n.content)visit(c,depth+1,n.type);return;}
   if(n.attrs!==undefined){
    if(!n.attrs||typeof n.attrs!=='object'||Array.isArray(n.attrs))throw new Error('Invalid node attributes.');
    for(const [k,v] of Object.entries(n.attrs)){
@@ -45,10 +48,15 @@ export function validateRich(rich){
   if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1,n.type);}
  }
  visit(rich.content,0);
+ academicIndex(rich.content);
  if(text>200000||JSON.stringify(rich).length>1000000)throw new Error('Structured document exceeds storage limit.');
  return rich;
 }
-export function richText(node){return isEquation(node.type)?equationRecovery(node):node.type==='text'?node.text:(node.content??[]).map(richText).join(node.type==='paragraph'||node.type==='heading'?'':' ');}
+export function richText(node){
+ let targets;try{targets=academicIndex(node);}catch{targets=new Map();}
+ function walk(n){if(isEquation(n.type))return equationRecovery(n);if(n.type==='text')return n.text;if(n.type==='academicReference')return academicText(n,targets);const body=(n.content??[]).map(walk).join(n.type==='paragraph'||n.type==='heading'?'':' ');return n.type==='academicBlock'?academicText(n,targets)+' '+body:body;}
+ return walk(node);
+}
 
 export function parseStructuredFile(text){
  if(typeof text!=='string'||text.length>2000000)throw new Error('Structured file exceeds import limit.');
