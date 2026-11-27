@@ -73,7 +73,7 @@ export function exportPublication(rich,{title='Untitled',author='',template='art
    case 'codeBlock':return env('quote',cmd('ttfamily','')+(n.content??[]).map(c=>texText(c.text).replace(/ /g,'\\ ')).join('')+'\\par');
    case 'inlineEquation':return '\\('+publicationMath(n.attrs.latex)+'\\)';
    case 'displayEquation':return env(n.attrs.numbered?'equation':'equation*',publicationMath(n.attrs.latex));
-   case 'academicBlock':{const {id,kind,label}=n.attrs;const anchor=kind==='proof'?cmd('hypertarget',key('office',id))+'{}':cmd('label',key('office',id));return env(kind,anchor+'\n'+children());}
+   case 'academicBlock':{const {id,kind,label}=n.attrs;const anchor=kind==='proof'?cmd('hypertarget',key('office',id))+'{}':cmd('label',key('office',id));return env(kind,anchor+'\n'+children().trimEnd());}
    case 'academicReference':{const t=targets.get(n.attrs.targetId);if(!t){warn('Unresolved academic reference: '+n.attrs.targetId);return '\\textbf{[Unresolved reference]}';}return t.kind==='proof'?'\\hyperlink{'+key('office',t.id)+'}{'+texText('Proof ['+t.label+']')+'}':kindName(t.kind)+'~'+cmd('ref',key('office',t.id));}
    case 'researchCitation':{const id=n.attrs.sourceId;if(!research.sources.has(id)){warn('Missing citation: '+id);return '\\textbf{[Missing citation]}';}return cmd('cite',key('cite',id));}
    case 'researchCatalog':return ''; // one bibliography at the end, independent of catalogue position
@@ -89,9 +89,9 @@ export function exportPublication(rich,{title='Untitled',author='',template='art
  const body=walk(rich.content);
  const preamble=[
  '\\documentclass['+style.options+']{'+style.className+'}',
- '\\usepackage{fontspec}', '\\setmainfont{Latin Modern Roman}',
+ '\\usepackage{fontspec}', '\\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]',
  '\\usepackage['+(layout.paper==='Letter'?'letterpaper':'a4paper')+','+(layout.orientation==='landscape'?'landscape,':'')+'margin='+layout.margin+'mm]{geometry}',
- '\\usepackage{amsmath,amssymb,amsthm}', '\\usepackage{tabularx}', '\\usepackage[normalem]{ulem}', '\\usepackage[hidelinks]{hyperref}',
+ '\\usepackage{amsmath,amssymb,amsthm}', ...(style.className==='report'?['\\counterwithout{equation}{chapter}']:[]), '\\usepackage{tabularx}', '\\usepackage[normalem]{ulem}', '\\usepackage[hidelinks]{hyperref}',
  '\\newtheorem{theorem}{Theorem}', '\\newtheorem{lemma}[theorem]{Lemma}', '\\newtheorem{proposition}[theorem]{Proposition}', '\\newtheorem{corollary}[theorem]{Corollary}', '\\theoremstyle{definition}', '\\newtheorem{definition}[theorem]{Definition}',
  cmd('title',texText(title)),cmd('author',texText(author)), '\\date{}'
  ].join('\n');

@@ -19,7 +19,7 @@ for(const template of Object.keys(PUBLICATION_TEMPLATES)){
  assert.ok(existsSync(join(dir,'publication.pdf')));
  const extracted=run('pdftotext',['-layout','publication.pdf','-'],dir);
  for(const phrase of ['Publication validation','Theorem 1','Paper 4','Paper 3'])assert.ok(extracted.includes(phrase),phrase);
- assert.ok(extracted.indexOf('Paper 4')<extracted.indexOf('Paper 3'));
+ assert.ok(extracted.indexOf('Paper 4')<extracted.indexOf('Paper 3'));assert.match(extracted,/\(1\)/);assert.doesNotMatch(extracted,/\(1\.1\)/);
  run('pdftoppm',['-png','-r','110','publication.pdf','page'],dir);
  console.log('PASS: compiled and rasterized '+template+'; inspect '+dir);
 }
