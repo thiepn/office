@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+import {readFile} from 'node:fs/promises';
+async function create(page){
+ await page.goto('/');await page.getByRole('button',{name:'New document'}).click();
+ await page.getByLabel('Document (Markdown)').fill('Original source');await expect(page.getByRole('status')).toHaveText('Saved locally');
+ page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Upgrade to structured document'}).click();
+ await expect(page.getByRole('textbox',{name:'Visual document'})).toBeVisible();await expect(page.getByRole('status')).toHaveText('Saved locally');
+}
+async function apply(page){await page.getByRole('button',{name:'Apply academic structure'}).click();await expect(page.getByRole('dialog',{name:/academic|cross-reference/i})).toHaveCount(0);await expect(page.getByRole('status')).toHaveText('Saved locally');}
+async function add(page,kind,label){await page.getByRole('button',{name:'Insert academic block',exact:true}).click();await page.getByLabel('Academic block kind').selectOption(kind);await page.getByLabel('Academic label').fill(label);await apply(page);}
+
+async function closeResearch(page){await page.getByRole('button',{name:'Close research dialog'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);}
+async function openResearch(page){await page.getByRole('button',{name:'Research sources',exact:true}).click();}
+async function importEntries(page,text){await page.getByText('Import BibTeX',{exact:true}).click();await page.getByLabel('BibTeX input').fill(text);await page.getByRole('button',{name:'Import entries',exact:true}).click();await expect(page.getByText('Source catalogue saved.',{exact:true})).toBeVisible();}
+async function cite(page,id){await page.getByRole('button',{name:'Insert citation',exact:true}).click();await page.getByLabel('Research source',{exact:true}).selectOption(id);await page.getByRole('button',{name:'Apply citation',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('status')).toHaveText('Saved locally');}
+test('manual sources, numeric citations, automatic bibliography, rename and deletion persist across reload',async({page})=>{
+ await create(page);await openResearch(page);await page.getByRole('button',{name:'New source',exact:true}).click();await page.getByLabel('BibTeX key',{exact:true}).fill('ada');await page.getByLabel('Source title',{exact:true}).fill('First paper');await page.getByLabel('Source author',{exact:true}).fill('Ada Lovelace');await page.getByRole('button',{name:'Save source',exact:true}).click();
+ await expect(page.getByText('Source catalogue saved.',{exact:true})).toBeVisible();const id=await page.getByLabel('Research source',{exact:true}).inputValue();await closeResearch(page);
+ await page.locator('.ProseMirror > p').first().click();await page.keyboard.press('End');await cite(page,id);await cite(page,id);
+ const cites=page.locator('.office-citation');await expect(cites).toHaveText(['[1]','[1]']);await expect(page.locator('.office-bibliography li')).toHaveText(['Ada Lovelace. First paper']);
+ await openResearch(page);await page.getByLabel('Research source',{exact:true}).selectOption(id);await page.getByRole('button',{name:'Edit source',exact:true}).click();await page.getByLabel('BibTeX key',{exact:true}).fill('ada2');await page.getByLabel('Source title',{exact:true}).fill('Revised paper');await page.getByRole('button',{name:'Save source',exact:true}).click();await expect(page.getByText('Source catalogue saved.',{exact:true})).toBeVisible();await closeResearch(page);await expect(page.locator('.office-bibliography li')).toHaveText(['Ada Lovelace. Revised paper']);await expect(page.getByRole('status')).toHaveText('Saved locally');await page.reload();await expect(cites).toHaveText(['[1]','[1]']);
+ await openResearch(page);await page.getByLabel('Research source',{exact:true}).selectOption(id);page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Remove source',exact:true}).click();await expect(page.getByText('Source catalogue saved.',{exact:true})).toBeVisible();await closeResearch(page);await expect(cites).toHaveText(['[Missing citation]','[Missing citation]']);await expect(page.locator('.office-bibliography li')).toHaveCount(0);await expect(page.getByRole('status')).toHaveText('Saved locally');
+});
+test('BibTeX import rejects duplicate keys atomically, exports exact fields and bibliography follows first citation order',async({page})=>{
+ await create(page);await openResearch(page);const input='@article{alpha,title={First {Paper}},year=2020}\n@book{beta,title={Second Book},publisher={Press}}';await importEntries(page,input);
+ const list=page.getByLabel('Research source',{exact:true});const ids=await list.locator('option').evaluateAll(o=>o.map(x=>x.value));await expect(list.locator('option')).toHaveCount(2);
+ await page.getByLabel('BibTeX input').fill('@article{alpha,title={Duplicate}}');await page.getByRole('button',{name:'Import entries',exact:true}).click();await expect(page.getByText('Duplicate source ID or BibTeX key.',{exact:true}).first()).toBeVisible();await expect(list.locator('option')).toHaveCount(2);
+ const dl=page.waitForEvent('download');await page.getByRole('button',{name:'Export BibTeX',exact:true}).click();const exported=await dl;expect(exported.suggestedFilename()).toMatch(/\.bib$/);const text=await readFile(await exported.path(),'utf8');expect(text).toContain('title = {First {Paper}}');expect(text).toContain('@book{beta,');
+ await closeResearch(page);await page.locator('.ProseMirror > p').first().click();await page.keyboard.press('End');await cite(page,ids[1]);await cite(page,ids[0]);await expect(page.locator('.office-bibliography li')).toHaveText(['Second Book. Press','First {Paper}. 2020']);
+ const cites=page.locator('.office-citation');await expect(cites).toHaveText(['[1]','[2]']);await cites.first().click();await page.keyboard.press('Backspace');await expect(cites).toHaveText(['[1]']);await expect(page.locator('.office-bibliography li')).toHaveText(['First {Paper}. 2020']);await expect(page.getByRole('status')).toHaveText('Saved locally');
+ const event=page.waitForEvent('download');await page.getByRole('button',{name:'Export structured JSON'}).click();const json=JSON.parse(await readFile(await (await event).path(),'utf8'));expect(json.rich.originalMarkdown).toBe('Original source');expect(json.rich.content.content.find(n=>n.type==='researchCatalog').attrs.sources.map(s=>s.key)).toEqual(['alpha','beta']);
+});
