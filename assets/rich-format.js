@@ -1,7 +1,8 @@
 // Versioned structured document envelope; original source remains immutable.
 import {validTypography,validateLayout,ALIGN,SPACING} from './authoring-format.js';
+import {isEquation,validateEquation,equationRecovery,EQUATION_COUNT_LIMIT} from './equation-format.js';
 export const RICH_VERSION=1;
-const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell']);
+const nodes=new Set(['doc','paragraph','text','heading','blockquote','bulletList','orderedList','listItem','codeBlock','hardBreak','horizontalRule','table','tableRow','tableHeader','tableCell','inlineEquation','displayEquation']);
 const marks=new Set(['bold','italic','code','strike','underline','link','typography']);
 export function safeLink(value){
  if(typeof value!=='string'||value.length>2048||/[\s\x00-\x1f]/u.test(value))return false;
@@ -11,9 +12,10 @@ export function validateRich(rich){
  if(!rich||rich.version!==1||typeof rich.originalMarkdown!=='string'||rich.originalMarkdown.length>200000||rich.content?.type!=='doc')throw new Error('Unsupported structured document format.');
  if(Object.keys(rich).some(k=>!['version','originalMarkdown','content','layout'].includes(k)))throw new Error('Unknown structured envelope field.');
  if(rich.layout!==undefined)validateLayout(rich.layout);
- let count=0,text=0;
- function visit(n,depth){
+ let count=0,text=0,equations=0;
+ function visit(n,depth,parent=null){
   if(!n||!nodes.has(n.type)||depth>40||++count>30000||Object.keys(n).some(k=>!['type','attrs','marks','content','text'].includes(k)))throw new Error('Invalid structured document node.');
+  if(isEquation(n.type)){if(n.type==='inlineEquation'?!['paragraph','heading'].includes(parent):!['doc','blockquote','listItem','tableCell','tableHeader'].includes(parent))throw Error('Invalid equation placement.');validateEquation(n.type,n.attrs);if(++equations>EQUATION_COUNT_LIMIT||n.text!==undefined||n.marks!==undefined||n.content!==undefined)throw Error('Invalid equation node or equation limit exceeded.');text+=n.attrs.latex.length;return;}
   if(n.attrs!==undefined){
    if(!n.attrs||typeof n.attrs!=='object'||Array.isArray(n.attrs))throw new Error('Invalid node attributes.');
    for(const [k,v] of Object.entries(n.attrs)){
@@ -40,13 +42,13 @@ export function validateRich(rich){
     }else if(m.type==='typography'){if(!validTypography(m.attrs))throw new Error('Invalid typography.');}else if(m.attrs&&Object.keys(m.attrs).length)throw new Error('Unsupported mark attributes.');
    }
   }
-  if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1);}
+  if(n.content!==undefined){if(!Array.isArray(n.content))throw new Error('Invalid content.');for(const c of n.content)visit(c,depth+1,n.type);}
  }
  visit(rich.content,0);
  if(text>200000||JSON.stringify(rich).length>1000000)throw new Error('Structured document exceeds storage limit.');
  return rich;
 }
-export function richText(node){return node.type==='text'?node.text:(node.content??[]).map(richText).join(node.type==='paragraph'||node.type==='heading'?'':' ');}
+export function richText(node){return isEquation(node.type)?equationRecovery(node):node.type==='text'?node.text:(node.content??[]).map(richText).join(node.type==='paragraph'||node.type==='heading'?'':' ');}
 
 export function parseStructuredFile(text){
  if(typeof text!=='string'||text.length>2000000)throw new Error('Structured file exceeds import limit.');
