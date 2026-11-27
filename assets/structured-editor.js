@@ -9,11 +9,12 @@ import {InlineEquation,DisplayEquation,selectedEquation,createEquationDialog} fr
 import {equationSourceExport,equationInventory} from './equation-format.js';
 import {AcademicIndex,AcademicBlock,AcademicReference,createAcademicDialog,currentAcademic,currentReference} from './academic-extension.js';
 import {academicIndex,targetText} from './academic-format.js';
+import {ResearchIndex,ResearchCatalog,ResearchCitation,createResearchDialog,researchSources,selectedCitation} from './research-extension.js';
 
 function officeExtensions(){return [
    StarterKit.configure({heading:{levels:[1,2,3]},trailingNode:false,link:{openOnClick:false,autolink:false,linkOnPaste:false,HTMLAttributes:{target:'_blank',rel:'noopener noreferrer'},isAllowedUri:(url,ctx)=>safeLink(url)&&ctx.defaultValidate(url)}}),
    TableKit.configure({table:{resizable:false}}),
-  Typography,ParagraphStyle,InlineEquation,DisplayEquation,AcademicBlock,AcademicReference,AcademicIndex];}
+  Typography,ParagraphStyle,InlineEquation,DisplayEquation,AcademicBlock,AcademicReference,AcademicIndex,ResearchCatalog,ResearchCitation,ResearchIndex];}
 export function validateStructuredImport(rich){
  validateRich(rich);const schema=getSchema(officeExtensions());const node=schema.nodeFromJSON(rich.content);node.check();
  // Reject a payload that would lose any supplied node or mark attributes.
@@ -21,7 +22,7 @@ export function validateStructuredImport(rich){
  if(!preserved(rich.content,node.toJSON()))throw new Error('Structured file does not round-trip through the editor schema.');
  return rich;
 }
-export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,initialRich,onPrintTitle,onEquationExport}){
+export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,initialRich,onPrintTitle,onEquationExport,onBibExport}){
  const doc=paper.ownerDocument;
  const el=(tag,text)=>{const n=doc.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const button=(text,fn)=>{const b=el('button',text);b.type='button';b.addEventListener('click',fn);return b;};
@@ -36,6 +37,7 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  const structuredExport=button('Export structured JSON',()=>{if(rich)onRichExport(rich);});structuredExport.hidden=true;
  const ribbon=el('div');ribbon.className='office-ribbon';const typography=el('div');typography.className='authoring-controls';const pageSettings=el('div');pageSettings.className='authoring-controls';const outline=el('nav');outline.className='document-outline';outline.setAttribute('aria-label','Document outline');const outlineTitle=el('h2','Document outline');const outlineList=el('div');outline.append(outlineTitle,outlineList);const work=el('div');work.className='visual-work';work.append(outline,frame);ribbon.append(tools,typography,pageSettings);panel.append(ribbon,work,recovery);paper.prepend(controls,note,structuredExport);paper.append(panel);
  let active=false,blocked=false,editor=null,rich=initialRich??null,composing=false,selectionControls=[],layout=initialRich?.layout??null;
+ const researchDialog=createResearchDialog(doc,panel,content=>validateRich({...rich,content}),message=>{note.textContent=message;},onBibExport);
  const academicDialog=createAcademicDialog(doc,panel,content=>validateRich({...rich,content}),message=>{note.textContent=message;});
  const equationDialog=createEquationDialog(doc,panel,message=>{note.textContent=message;},content=>validateRich({...rich,content}));
  const equationExport=button('Export equation sources',()=>{if(rich&&onEquationExport)onEquationExport(equationSourceExport(rich.content));});tools.append(equationExport);
@@ -111,6 +113,9 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  tool('Edit academic block',e=>{const t=currentAcademic(e);if(t)academicDialog.open(e,'block',t);return false;},{richOnly:true,can:e=>!!currentAcademic(e)});
  tool('Insert cross-reference',e=>{academicDialog.open(e,'reference');return false;},{richOnly:true,can:e=>academicIndex(e.getJSON()).size>0});
  tool('Edit cross-reference',e=>{const t=currentReference(e);if(t)academicDialog.open(e,'reference',t);return false;},{richOnly:true,can:e=>!!currentReference(e)});
+ tool('Research sources',e=>{researchDialog.open(e,'manage');return false;},{richOnly:true});
+ tool('Insert citation',e=>{researchDialog.open(e,'cite');return false;},{richOnly:true,can:e=>researchSources(e).length>0});
+ tool('Edit citation',e=>{const t=selectedCitation(e);if(t)researchDialog.open(e,'cite',t);return false;},{richOnly:true,can:e=>!!selectedCitation(e)&&researchSources(e).length>0});
  tool('Insert table',e=>e.chain().focus().insertTable({rows:3,cols:3,withHeaderRow:true}).run(),{richOnly:true});
  for(const [name,cmd] of [['Add row','addRowAfter'],['Add column','addColumnAfter'],['Delete row','deleteRow'],['Delete column','deleteColumn'],['Delete table','deleteTable'],['Merge cells','mergeCells'],['Split cell','splitCell']])tool(name,e=>e.chain().focus()[cmd]().run(),{richOnly:true,can:e=>e.can()[cmd]()});
  tool('Undo',e=>e.chain().focus().undo().run(),{can:e=>e.can().undo()});

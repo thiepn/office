@@ -15,6 +15,7 @@ const libraryURL=()=>accountMode?'/?workspace=account':'/';
 const docURL=id=>'/docs/?id='+encodeURIComponent(id)+(accountMode?'&workspace=account':'');
 function statusNode(){const p=el('p','','status');p.setAttribute('role','status');p.setAttribute('aria-live','polite');return p;}
 function status(node,msg,error=false){node.textContent=msg;node.dataset.error=String(error);}
+function downloadBib(title,body){const url=URL.createObjectURL(new Blob([body],{type:'text/plain;charset=utf-8'}));const a=link('',url);a.download=filename(title).replace(/\.md$/,'.bib');document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function download(title,body,json=false){const url=URL.createObjectURL(new Blob([body],{type:json?'application/json':'text/markdown;charset=utf-8'}));const a=link('',url);a.download=json?filename(title).replace(/\.md$/,'.office.json'):filename(title);document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 async function library(){
  const hero=el('div',undefined,'hero'),intro=el('div');intro.append(el('div','Workspace / Documents','eyebrow'),el('h1','Your documents'),el('p','Create, find and organize your writing.'));hero.append(intro);
@@ -107,7 +108,7 @@ async function editor(){
   try{doc=await store.save(doc.id,doc.revision,patch,accountMode?doc:undefined);busy=false;if(accountLocked)return;update();if(!dirty)clearOwnDraft();syncRefresh?.();if(visual?.blocked){status(msg,'Visual edits still need attention. Your last valid revision is retained.',true);}else if(dirty){status(msg,'Unsaved changes');timer=setTimeout(persist,700);}else status(msg,'Saved locally');}
   catch(e){busy=false;if(accountLocked)return;if(e instanceof Conflict){conflict=true;reload.hidden=false;status(msg,e.message+' Export your draft before reloading.',true);}else status(msg,e.message+' Your draft is still open.',true);update();}
  }
- visual=mountVisual({paper,body,label,initialRich:doc.rich,onPrintTitle:()=>title.value,onEquationExport:text=>download(title.value+' (equations)',text),onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
+ visual=mountVisual({paper,body,label,initialRich:doc.rich,onPrintTitle:()=>title.value,onEquationExport:text=>download(title.value+' (equations)',text),onBibExport:text=>downloadBib(title.value+' (references)',text),onChange:()=>{if(visual)change();},onRecovery:text=>download(title.value+' (visual recovery)',text),onRichExport:rich=>download(title.value,JSON.stringify({kind:'thiepn-office-structured',title:title.value,rich},null,2),true)});
  for(const field of [title,body])field.addEventListener('input',change);
  window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();persist();}});
  window.addEventListener('beforeunload',e=>{if(!discarding&&!accountLocked&&(dirty||busy||visual?.blocked)){e.preventDefault();e.returnValue='';}});
