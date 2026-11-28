@@ -10,6 +10,7 @@ import {equationSourceExport,equationInventory} from './equation-format.js';
 import {AcademicIndex,AcademicBlock,AcademicReference,createAcademicDialog,currentAcademic,currentReference} from './academic-extension.js';
 import {academicIndex,targetText} from './academic-format.js';
 import {ResearchIndex,ResearchCatalog,ResearchCitation,createResearchDialog,researchSources,selectedCitation} from './research-extension.js';
+import {createPublicationDialog} from './publication-dialog.js';
 
 function officeExtensions(){return [
    StarterKit.configure({heading:{levels:[1,2,3]},trailingNode:false,link:{openOnClick:false,autolink:false,linkOnPaste:false,HTMLAttributes:{target:'_blank',rel:'noopener noreferrer'},isAllowedUri:(url,ctx)=>safeLink(url)&&ctx.defaultValidate(url)}}),
@@ -139,6 +140,8 @@ export function mountVisual({paper,body,label,onChange,onRecovery,onRichExport,i
  const orientation=choose(pageSettings,'Orientation',[['portrait','Portrait'],['landscape','Landscape']],v=>pageChange('orientation',v));
  const margins=choose(pageSettings,'Margins',[[12,'12 mm'],[20,'20 mm'],[25,'25 mm'],[30,'30 mm']],v=>pageChange('margin',Number(v)));
  paperSize.value=(layout??DEFAULT_LAYOUT).paper;orientation.value=(layout??DEFAULT_LAYOUT).orientation;margins.value=String((layout??DEFAULT_LAYOUT).margin);
+ const publication=createPublicationDialog(doc,panel,()=>{if(!rich||!active||blocked||composing)throw Error('Finish editing the structured document before exporting.');return rich;},onPrintTitle);
+ const publicationButton=button('Academic publication',()=>publication.open());pageSettings.append(publicationButton);
  const print=button('Print / Save PDF',()=>{if(!active||!editor||blocked||composing)return;const old=doc.title;doc.title=onPrintTitle?.()||old;doc.body.classList.add('office-printing');const clean=()=>{doc.body.classList.remove('office-printing');doc.title=old;};window.addEventListener('afterprint',clean,{once:true});try{window.print();}catch{clean();}});pageSettings.append(print);
  tool('Toggle header row',e=>e.chain().focus().toggleHeaderRow().run(),{richOnly:true,can:e=>e.can().toggleHeaderRow()});
  tool('Toggle header column',e=>e.chain().focus().toggleHeaderColumn().run(),{richOnly:true,can:e=>e.can().toggleHeaderColumn()});

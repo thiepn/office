@@ -5,7 +5,7 @@ import {ACADEMIC_KINDS,academicIndex,kindName,targetText,validateAcademicAttrs} 
 const key=new PluginKey('officeAcademicIndex');
 function indexDoc(doc){
  const targets=academicIndex(doc.toJSON()),positions=new Map(),decos=[];
- doc.descendants((n,pos)=>{if(n.type.name==='academicBlock')positions.set(n.attrs.id,pos);});
+ doc.descendants((n,pos)=>{if(n.type.name==='academicBlock'||(n.type.name==='displayEquation'&&n.attrs.numbered&&n.attrs.id))positions.set(n.attrs.id,pos);});
  doc.descendants((n,pos)=>{
   const target=n.type.name==='academicBlock'?targets.get(n.attrs.id):n.type.name==='academicReference'?targets.get(n.attrs.targetId):null;
   if(n.type.name==='academicBlock'||n.type.name==='academicReference'){
@@ -40,7 +40,7 @@ export const AcademicReference=Node.create({
   function update(n,d){if(n.type.name!=='academicReference')return false;targetId=n.attrs.targetId;dom.textContent=d[0]?.spec.caption??'[Unresolved reference]';dom.dataset.unresolved=String(!d[0]?.spec.resolved);dom.title=d[0]?.spec.resolved?'Double-click to navigate: '+d[0].spec.label:'Missing target; select to repair reference';return true;}
   update(node,decorations);
   const select=e=>{if(e.button!==0)return;const p=getPos();if(typeof p!=='number')return;e.preventDefault();view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc,p)));view.focus();};
-  const jump=e=>{e.preventDefault();const p=key.getState(view.state).positions.get(targetId);if(p===undefined)return;view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc,p+2)).scrollIntoView());view.focus();view.nodeDOM(p)?.scrollIntoView?.({block:'nearest'});};
+  const jump=e=>{e.preventDefault();const p=key.getState(view.state).positions.get(targetId);if(p===undefined)return;const node=view.state.doc.nodeAt(p);if(!node)return;const selection=node.type.name==='displayEquation'?NodeSelection.create(view.state.doc,p):TextSelection.create(view.state.doc,p+2);view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());view.focus();view.nodeDOM(p)?.scrollIntoView?.({block:'nearest'});};
   dom.addEventListener('mousedown',select);dom.addEventListener('dblclick',jump);
   return {dom,update,stopEvent:e=>['mousedown','dblclick'].includes(e.type),ignoreMutation:()=>true,selectNode(){dom.classList.add('ProseMirror-selectednode');},deselectNode(){dom.classList.remove('ProseMirror-selectednode');},destroy(){dom.removeEventListener('mousedown',select);dom.removeEventListener('dblclick',jump);}};
  };}
@@ -72,7 +72,7 @@ export function createAcademicDialog(doc,container,validateContent,onError){
  }
  function validate(){if(!pending)return false;try{
   if(pending.mode==='reference'){if(!target.value)throw Error('Choose an academic target.');validateAcademicAttrs('academicReference',{targetId:target.value});}
-  else{const attrs={id:pending.id,kind:kind.value,label:label.value};validateAcademicAttrs('academicBlock',attrs);for(const t of key.getState(pending.editor.state).targets.values())if(t.label===attrs.label&&t.id!==attrs.id)throw Error('This label is already used.');}
+  else{const attrs={id:pending.id,kind:kind.value,label:label.value};validateAcademicAttrs('academicBlock',attrs);for(const t of key.getState(pending.editor.state).targets.values())if(t.kind!=='equation'&&t.label===attrs.label&&t.id!==attrs.id)throw Error('This label is already used.');}
   message.textContent='';apply.disabled=false;return true;
  }catch(e){message.textContent=e.message;apply.disabled=true;return false;}}
  for(const input of [kind,label,target])input.addEventListener('input',validate);

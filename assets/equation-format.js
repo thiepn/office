@@ -5,7 +5,7 @@ export const isEquation=type=>EQUATION_TYPES.includes(type);
 const unsafeCommand=/\\(?:href|url|includegraphics|html[A-Za-z]*|class|style|cssId|unicode|def|gdef|edef|xdef|let|futurelet|newcommand|renewcommand|providecommand|global|catcode|input|include|openout|write|read|usepackage|csname|expandafter|noexpand|tag|label|ref|eqref|notag|nonumber)(?![A-Za-z])/;
 export function validateEquation(type,attrs){
  const display=type==='displayEquation';
- if(!isEquation(type)||!attrs||typeof attrs!=='object'||Array.isArray(attrs)||Object.keys(attrs).sort().join(',')!==(display?'latex,numbered':'latex')||
+ if(!isEquation(type)||!attrs||typeof attrs!=='object'||Array.isArray(attrs)||(display?(!['latex,numbered','id,latex,numbered'].includes(Object.keys(attrs).sort().join(','))||(attrs.id!=null&&(typeof attrs.id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(attrs.id)))||(Object.hasOwn(attrs,'id')&&attrs.id===undefined)):Object.keys(attrs).sort().join(',')!=='latex')||
  typeof attrs.latex!=='string'||!attrs.latex.trim()||new TextEncoder().encode(attrs.latex).length>EQUATION_LIMIT||
  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(attrs.latex)||unsafeCommand.test(attrs.latex)||
  (display&&typeof attrs.numbered!=='boolean')||(!display&&/[\r\n]/.test(attrs.latex)))throw Error('Invalid equation source or attributes.');

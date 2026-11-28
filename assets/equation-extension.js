@@ -22,7 +22,7 @@ function equationNode(display){
  const name=display?'displayEquation':'inlineEquation';
  return Node.create({
   name,group:display?'block':'inline',inline:!display,atom:true,selectable:true,draggable:false,marks:'',
-  addAttributes(){return {latex:{default:''},...(display?{numbered:{default:true}}:{})};},
+  addAttributes(){return {latex:{default:''},...(display?{numbered:{default:true},id:{default:null}}:{})};},
   renderHTML({node}){return [display?'div':'span',{'data-office-equation':name},node.attrs.latex];},
   renderText({node}){return node.attrs.latex;},
   addNodeView(){return ({node,decorations,editor,getPos,view})=>{
@@ -39,7 +39,7 @@ function equationNode(display){
      previous=next.attrs.latex;
     }
     const n=display&&next.attrs.numbered?decos.find(d=>Number.isInteger(d.spec.number))?.spec.number:null;
-    number.textContent=n?'('+n+')':'';number.hidden=!n;
+    number.textContent=n?'('+n+')':'';number.hidden=!n;if(display&&next.attrs.id)dom.dataset.equationId=next.attrs.id;else delete dom.dataset.equationId;
     dom.title=dom.dataset.equationError?'Equation could not render; LaTeX source retained. Select and edit.':'Select to edit LaTeX';
     return true;
    }
@@ -67,7 +67,7 @@ export function createEquationDialog(doc,container,onError,validateContent){
  const save=el('button','Apply equation');save.type='submit';const cancel=el('button','Cancel equation');cancel.type='button';cancel.addEventListener('click',()=>dialog.close());
  form.append(heading,label,numberLabel,hint,preview,message,save,cancel);dialog.append(form);container.append(dialog);
  let pending=null;
- function attrs(){return {latex:source.value,...(pending.type==='displayEquation'?{numbered:numbered.checked}:{})};}
+ function attrs(){return {latex:source.value,...(pending.type==='displayEquation'?{numbered:numbered.checked,id:pending.id}:{})};}
  function refresh(){if(!pending)return false;try{renderEquation(pending.type,attrs(),preview);message.textContent='';save.disabled=false;return true;}catch{preview.replaceChildren();message.textContent='Invalid or unsupported LaTeX. Correct the source before applying.';save.disabled=true;return false;}}
  source.addEventListener('input',refresh);numbered.addEventListener('change',refresh);
  form.addEventListener('submit',event=>{
@@ -111,7 +111,7 @@ export function createEquationDialog(doc,container,onError,validateContent){
  dialog.addEventListener('close',()=>{pending=null;});
  return {open(editor,type,editing=null){
   if(dialog.open)return;
-  pending={editor,type,original:editor.state.doc,selection:editor.state.selection,editing};
+  pending={editor,type,original:editor.state.doc,selection:editor.state.selection,editing,id:type==='displayEquation'?(editing?.node.attrs.id??crypto.randomUUID()):null};
   heading.textContent=editing?'Edit equation':type==='displayEquation'?'Insert display equation':'Insert inline equation';
   source.value=editing?.node.attrs.latex??'';numberLabel.hidden=type!=='displayEquation';numbered.checked=editing?.node.attrs.numbered??true;
   dialog.showModal();refresh();source.focus();

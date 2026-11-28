@@ -39,3 +39,19 @@ test('equation records and history synchronize across verified browser contexts 
  expect(await b.evaluate(async({backup,id})=>{const {verifyPortableBackup}=await import('/assets/portable-backup.js');return (await verifyPortableBackup(backup)).documents.find(d=>d.id===id);},{backup,id:expected.id})).toEqual(expected);
  }finally{await Promise.all(devices.map(d=>d.context.close()));}
 });
+
+test('stable equation UUID and cross-reference survive two-device sync and portable backup',async({browser,browserName})=>{
+ const devices=[];try{
+  const first=await device(browser,'device-a');devices.push(first);const second=await device(browser,'device-b');devices.push(second);const a=first.page,b=second.page;
+  const title='Stable equation target '+browserName+' '+Date.now(),targetId='ab000000-0000-4000-8000-000000000006';
+  const expected=await a.evaluate(async({owner,title,targetId})=>{
+   const {openAccountWorkspace}=await import('/assets/account-store.js');const s=await openAccountWorkspace({status:'signed-in',id:owner});
+   const rich={version:1,originalMarkdown:'Original Markdown',content:{type:'doc',content:[{type:'paragraph',content:[{type:'academicReference',attrs:{targetId}}]},{type:'displayEquation',attrs:{latex:'x=1',numbered:true,id:targetId}}]}};
+   try{const d=await s.add(title,rich.originalMarkdown,rich);const next=structuredClone(rich);next.content.content.unshift({type:'displayEquation',attrs:{latex:'y=2',numbered:true}});return await s.save(d.id,d.revision,{rich:next},d);}finally{s.close();}
+  },{owner:A,title,targetId});
+  await a.reload();await sync(a);await sync(b);expect((await row(a,expected.id)).doc).toEqual(expected);expect((await row(b,expected.id)).doc).toEqual(expected);
+  await b.getByRole('link',{name:title,exact:true}).click();await expect(b.locator('.office-academic-reference')).toHaveText('Equation (2)');await expect(b.locator('[data-equation-id="'+targetId+'"]')).toHaveCount(1);
+  await library(b);await b.getByText('Migration and document backups',{exact:true}).click();const dl=b.waitForEvent('download');await b.getByRole('button',{name:'Export document backup'}).click();const backup=JSON.parse(await readFile(await (await dl).path(),'utf8'));
+  expect(await b.evaluate(async({backup,id})=>{const {verifyPortableBackup}=await import('/assets/portable-backup.js');return (await verifyPortableBackup(backup)).documents.find(d=>d.id===id);},{backup,id:expected.id})).toEqual(expected);
+ }finally{await Promise.all(devices.map(d=>d.context.close()));}
+});
