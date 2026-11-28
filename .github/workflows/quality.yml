@@ -17,6 +17,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node tests/verify-hub-adapter.mjs
       - run: npm run build
+      - run: node scripts/prepare-release.mjs /tmp/office-static "$GITHUB_SHA"
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser
       - name: Verify generated publication documents with local XeLaTeX

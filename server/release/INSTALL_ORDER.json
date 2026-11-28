@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "mode": "source-only",
+  "gate": "disabled",
+  "files": [
+    "server/proposals/o4-2-office-sync.sql",
+    "server/proposals/o4-4-discovery.sql",
+    "server/proposals/o4-6-production-gate.sql",
+    "server/proposals/o5-1-equations.sql",
+    "server/proposals/o5-2-academic-structure.sql",
+    "server/proposals/o5-3-research.sql",
+    "server/proposals/o5-4-equation-identities.sql",
+    "server/proposals/o4-5-batch-import.sql"
+  ],
+  "rollback": "server/release/disable-office.sql",
+  "activation": "Separate authorization; never part of installation"
+}
